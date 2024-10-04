@@ -35,9 +35,14 @@ Always return the three one-liners in the following **JSON structure**:
   "parameters": {
     "type": "object",
     "required": [
+      "table_id",
       "discussion_notes"
     ],
     "properties": {
+      "table_id": {
+        "type": "string",
+        "description": "Unique identifier for the table. Each table in the strategic planning session should have a unique ID."
+      },
       "discussion_notes": {
         "type": "array",
         "description": "List of notes from the strategic planning session to create one-liners from.",
@@ -50,4 +55,5 @@ Always return the three one-liners in the following **JSON structure**:
     "additionalProperties": false
   }
 }
+
 ```
