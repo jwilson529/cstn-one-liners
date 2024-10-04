@@ -120,6 +120,11 @@ class Cstn_One_Liners {
 		 */
 		require_once plugin_dir_path( __DIR__ ) . 'admin/class-cstn-one-liners-openai.php';
 
+		/**
+		 * The class responsible for defining all vector create and storage functions.
+		 */
+		require_once plugin_dir_path( __DIR__ ) . 'admin/class-cstn-one-liners-vectors.php';
+
 
 		/**
 		 * The class responsible for defining all actions that occur in the public-facing
@@ -157,6 +162,7 @@ class Cstn_One_Liners {
 
 	    $plugin_admin = new Cstn_One_Liners_Admin( $this->get_cstnOneLiners(), $this->get_version() );
 	    $plugin_openai = new Cstn_One_Liners_Openai();
+	    $plugin_vectors = new Cstn_One_Liners_Vectors();
 
 	    // Enqueue styles and scripts for the admin area.
 	    $this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );

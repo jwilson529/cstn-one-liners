@@ -21,7 +21,7 @@
  */
 class Cstn_One_Liners_Openai {
 
-	// Define a property to hold all collected sentences across all entries.
+	// Holds all collected sentences across entries.
 	private $all_collected_sentences = array();
 
 	/**
@@ -30,351 +30,138 @@ class Cstn_One_Liners_Openai {
 	 * @since 1.0.0
 	 */
 	public function cstn_process_entries() {
+		// Verify the nonce to ensure the request is valid and secure.
+		if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
+			wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Verify the nonce to ensure the request is valid and secure.
-	    if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
-	        wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Retrieve necessary options from the plugin settings.
+		$api_key         = get_option( 'cstn_one_liners_api_key' );
+		$assistant_id    = get_option( 'cstn_one_liners_assistant_id' );
+		$vector_store_id = get_option( 'cstn_one_liners_vector_store_id' );
 
-	    // Retrieve necessary options from the plugin settings.
-	    $api_key         = get_option( 'cstn_one_liners_api_key' );
-	    $assistant_id    = get_option( 'cstn_one_liners_assistant_id' );
-	    $vector_store_id = get_option( 'cstn_one_liners_vector_store_id' );
+		// Validate the presence of essential configuration options.
+		if ( empty( $api_key ) || empty( $assistant_id ) || empty( $vector_store_id ) ) {
+			wp_send_json_error( __( 'API Key, Assistant ID, or Vector Store ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Validate the presence of essential configuration options.
-	    if ( empty( $api_key ) || empty( $assistant_id ) || empty( $vector_store_id ) ) {
-	        wp_send_json_error( __( 'API Key, Assistant ID, or Vector Store ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Retrieve the form ID from the plugin settings.
+		$form_id = get_option( 'cstn_one_liners_form_id' );
+		if ( empty( $form_id ) ) {
+			wp_send_json_error( __( 'Form ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Retrieve the form ID from the plugin settings.
-	    $form_id = get_option( 'cstn_one_liners_form_id' );
-	    if ( empty( $form_id ) ) {
-	        wp_send_json_error( __( 'Form ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Retrieve only active entries from the specified Gravity Forms form.
+		$search_criteria = array( 'status' => 'active' );
+		$entries         = GFAPI::get_entries( $form_id, $search_criteria );
 
-	    // Retrieve only active entries from the specified Gravity Forms form.
-	    $search_criteria = array( 'status' => 'active' );
-	    $entries         = GFAPI::get_entries( $form_id, $search_criteria );
+		// Handle potential errors when fetching entries.
+		if ( is_wp_error( $entries ) ) {
+			wp_send_json_error( __( 'Failed to retrieve entries: ' . $entries->get_error_message(), 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Handle potential errors when fetching entries.
-	    if ( is_wp_error( $entries ) ) {
-	        wp_send_json_error( __( 'Failed to retrieve entries: ' . $entries->get_error_message(), 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Check if there are any entries in the form.
+		if ( empty( $entries ) ) {
+			wp_send_json_error( __( 'No entries found in the form.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Check if there are any entries in the form.
-	    if ( empty( $entries ) ) {
-	        wp_send_json_error( __( 'No entries found in the form.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Initialize an array to store one-liners and their embeddings.
+		$one_liners = array();
 
-	    // Initialize an array to store one-liners and their embeddings.
-	    $one_liners = array();
+		// Create a new thread for processing the entries through the assistant.
+		$thread_id = $this->create_thread( $api_key );
+		if ( ! $thread_id ) {
+			wp_send_json_error( __( 'Failed to create a new thread for processing.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Create a new thread for processing the entries through the assistant.
-	    $thread_id = $this->create_thread( $api_key );
-	    if ( ! $thread_id ) {
-	        wp_send_json_error( __( 'Failed to create a new thread for processing.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Loop through each entry, process it through the assistant, and store the results.
+		foreach ( $entries as $entry ) {
+			// Retrieve fields from the entry and ensure they have default empty values if not set.
+			$field_1 = isset( $entry[1] ) ? $entry[1] : '';
+			$field_3 = isset( $entry[3] ) ? $entry[3] : '';
+			$field_4 = isset( $entry[4] ) ? $entry[4] : '';
 
-	    // Loop through each entry, process it through the assistant, and store the results.
-	    foreach ( $entries as $entry ) {
+			// Combine fields into a single query to send to the assistant.
+			$entry_text = sprintf(
+				"What brought you to Centerstone?\n%s\n\nHow does Centerstone support the community?\n%s\n\nIn a word, what does Noble Purpose mean to you?\n%s",
+				$field_1,
+				$field_3,
+				$field_4
+			);
 
-	        // Retrieve fields from the entry and ensure they have default empty values if not set.
-	        $field_1 = isset( $entry[1] ) ? $entry[1] : ''; // What brought you to Centerstone?
-	        $field_3 = isset( $entry[3] ) ? $entry[3] : ''; // How does Centerstone support the community?
-	        $field_4 = isset( $entry[4] ) ? $entry[4] : ''; // In a word, what does Noble Purpose mean to you?
+			// Send the entry text to the assistant and get a response.
+			$one_liner_response = $this->add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $entry_text );
 
-	        // Combine fields into a single query to send to the assistant.
-	        $entry_text = sprintf(
-	            "What brought you to Centerstone?\n%s\n\nHow does Centerstone support the community?\n%s\n\nIn a word, what does Noble Purpose mean to you?\n%s",
-	            $field_1,
-	            $field_3,
-	            $field_4
-	        );
+			// Check if the assistant response is valid.
+			if ( is_wp_error( $one_liner_response ) ) {
+				$one_liners[] = array(
+					'entry_id' => $entry['id'],
+					'error'    => $one_liner_response->get_error_message(),
+				);
+				continue;
+			}
 
-	        // Send the entry text to the assistant and get a response.
-	        $one_liner_response = $this->add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $entry_text );
+			// Handle the one-liner response based on its array structure.
+			if ( is_array( $one_liner_response ) && isset( $one_liner_response['summary'] ) && is_array( $one_liner_response['summary'] ) ) {
+				$summary_text_array = $one_liner_response['summary'];
 
-	        // Check if the assistant response is valid.
-	        if ( is_wp_error( $one_liner_response ) ) {
-	            $one_liners[] = array(
-	                'entry_id' => $entry['id'],
-	                'error'    => $one_liner_response->get_error_message(),
-	            );
-	            continue;
-	        }
+				// Generate a single vector embedding for the original entry text.
+				$vector = Cstn_One_Liners_Vectors::generate_vector_for_text( $api_key, $entry_text );
+				if ( is_wp_error( $vector ) ) {
+					$one_liners[] = array(
+						'entry_id' => $entry['id'],
+						'error'    => 'Embedding Error: ' . $vector->get_error_message(),
+					);
+					continue;
+				}
 
-	        // Handle the one-liner response based on its array structure.
-	        if ( is_array( $one_liner_response ) && isset( $one_liner_response['summary'] ) && is_array( $one_liner_response['summary'] ) ) {
-	            $summary_text_array = $one_liner_response['summary'];
+				// Store the generated vector in the vector store.
+				$storage_result = Cstn_One_Liners_Vectors::store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry['id'], $entry_text );
+				if ( is_wp_error( $storage_result ) ) {
+					$one_liners[] = array(
+						'entry_id' => $entry['id'],
+						'error'    => 'Vector Store Error: ' . $storage_result->get_error_message(),
+					);
+					continue;
+				}
 
-	            // Generate a single vector embedding for the original entry text.
-	            $vector = $this->generate_vector_for_text( $api_key, $entry_text );
-	            if ( is_wp_error( $vector ) ) {
-	                $one_liners[] = array(
-	                    'entry_id' => $entry['id'],
-	                    'error'    => 'Embedding Error: ' . $vector->get_error_message(),
-	                );
-	                continue;
-	            }
+				// Collect the three one-liners (sentences) from this entry.
+				$this->all_collected_sentences = array_merge( $this->all_collected_sentences, $summary_text_array );
 
-	            // Store the generated vector in the vector store.
-	            $storage_result = $this->store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry['id'], $entry_text );
-	            if ( is_wp_error( $storage_result ) ) {
-	                $one_liners[] = array(
-	                    'entry_id' => $entry['id'],
-	                    'error'    => 'Vector Store Error: ' . $storage_result->get_error_message(),
-	                );
-	                continue;
-	            }
+				// Add the processed summary text and vector to the final one-liners array.
+				$one_liners[] = array(
+					'entry_id'  => $entry['id'],
+					'one_liner' => $summary_text_array,
+					'vector'    => $vector,
+				);
+			} else {
+				$one_liners[] = array(
+					'entry_id' => $entry['id'],
+					'error'    => 'Missing or invalid summary in one-liner response.',
+				);
+			}
+		}
 
-	            // Collect the three one-liners (sentences) from this entry.
-	            $this->all_collected_sentences = array_merge( $this->all_collected_sentences, $summary_text_array );
+		// Generate the final cumulative summary using all collected sentences.
+		$final_summary = $this->generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $this->all_collected_sentences );
 
-	            // Add the processed summary text and vector to the final one-liners array.
-	            $one_liners[] = array(
-	                'entry_id'  => $entry['id'],
-	                'one_liner' => $summary_text_array, // Store the summary as an array for separate sentences.
-	                'vector'    => $vector,             // Store the vector for the entire entry text.
-	            );
-	        } else {
-	            $one_liners[] = array(
-	                'entry_id' => $entry['id'],
-	                'error'    => 'Missing or invalid summary in one-liner response.',
-	            );
-	        }
-	    }
+		// Prepare the response to be sent back to the client.
+		$response = array(
+			'entries'       => $one_liners,
+			'final_summary' => $final_summary,
+		);
 
-	    // Generate the final cumulative summary using all collected sentences.
-	    $final_summary = $this->generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $this->all_collected_sentences );
-
-	    // Prepare the response to be sent back to the client.
-	    $response = array(
-	        'entries'       => $one_liners,
-	        'final_summary' => $final_summary, // Include the actual final summary text.
-	    );
-
-	    // Send the one-liners and final summary back for display.
-	    wp_send_json_success( $response );
+		// Send the one-liners and final summary back for display.
+		wp_send_json_success( $response );
 	}
-
-
-
-
-
 
 	/**
-	 * Helper method to generate a vector for a given text.
-	 *
-	 * @since 1.0.0
-	 * @param string $api_key The OpenAI API key.
-	 * @param string $text    The text content to generate a vector for.
-	 * @return array|WP_Error The generated vector or WP_Error on failure.
-	 */
-	private function generate_vector_for_text( $api_key, $text ) {
-	    // Check if $text is an array and convert it to a string if necessary.
-	    if ( is_array( $text ) ) {
-	        // error_log( '[WARNING] Input text is an array. Converting array to JSON string.' );
-	        $text = json_encode( $text );
-	    }
-
-	    // Ensure $text is a string.
-	    if ( ! is_string( $text ) ) {
-	        // error_log( '[ERROR] Input text is not a string. Type received: ' . gettype( $text ) );
-	        return new WP_Error( 'invalid_input', __( 'Input text must be a string.', 'cstn-one-liners' ) );
-	    }
-
-	    // Log the text being sent for embedding generation.
-	    // error_log( '[INFO] Generating vector for text: ' . $text );
-
-	    $response = wp_remote_post(
-	        'https://api.openai.com/v1/embeddings',
-	        array(
-	            'headers' => array(
-	                'Authorization' => 'Bearer ' . $api_key,
-	                'Content-Type'  => 'application/json',
-	            ),
-	            'body'    => wp_json_encode( array( 'input' => $text, 'model' => 'text-embedding-ada-002' ) ),
-	        )
-	    );
-
-	    // Check for errors in the API request.
-	    if ( is_wp_error( $response ) ) {
-	        // error_log( '[ERROR] Failed to generate embedding: ' . $response->get_error_message() );
-	        return new WP_Error( 'embedding_failed', __( 'Failed to generate embedding: ' . $response->get_error_message(), 'cstn-one-liners' ) );
-	    }
-
-	    $response_body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-	    // Check if the expected embedding data is present in the response.
-	    if ( ! isset( $response_body['data'][0]['embedding'] ) ) {
-	        // error_log( '[ERROR] Embedding data not found in response: ' . print_r( $response_body, true ) );
-	        return new WP_Error( 'embedding_missing', __( 'Embedding data not found in response.', 'cstn-one-liners' ) );
-	    }
-
-	    // error_log( '[INFO] Successfully generated embedding for text: ' . print_r( $response_body['data'][0]['embedding'], true ) );
-
-	    return $response_body['data'][0]['embedding'];
-	}
-
-
-
-	private function create_vector_file( $api_key, $vector, $entry_id, $text ) {
-	    // Prepare file content to be stored in OpenAI.
-	    $file_content = json_encode( array(
-	        'vector'   => $vector,
-	        'entry_id' => $entry_id,
-	        'text'     => $text,
-	    ) );
-
-	    // Create a temporary file for the vector data.
-	    $temp_file_path = wp_tempnam( 'vector_data' );
-	    file_put_contents( $temp_file_path, $file_content );
-
-	    // Initialize cURL
-	    $ch = curl_init();
-
-	    // Set cURL options
-	    curl_setopt( $ch, CURLOPT_URL, 'https://api.openai.com/v1/files' );
-	    curl_setopt( $ch, CURLOPT_POST, 1 );
-	    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
-
-	    $headers = array(
-	        'Authorization: Bearer ' . $api_key,
-	        'OpenAI-Beta: assistants=v2',
-	        // Do not set Content-Type header; cURL will set it automatically for multipart/form-data
-	    );
-
-	    curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers );
-
-	    $postfields = array(
-	        'purpose' => 'fine-tune', // Use a valid purpose according to OpenAI API documentation
-	        'file'    => new CURLFile( $temp_file_path, 'application/json', 'vector_data.json' ),
-	    );
-
-	    curl_setopt( $ch, CURLOPT_POSTFIELDS, $postfields );
-
-	    // Execute cURL request
-	    $response = curl_exec( $ch );
-	    $httpcode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
-	    $err = curl_error( $ch );
-	    curl_close( $ch );
-
-	    // Remove the temporary file after uploading.
-	    unlink( $temp_file_path );
-
-	    if ( $err ) {
-	        return new WP_Error( 'file_creation_failed', __( 'Failed to create file: ' . $err, 'cstn-one-liners' ) );
-	    } else {
-	        $response_body = json_decode( $response, true );
-
-	        if ( $httpcode !== 200 ) {
-	            $error_message = isset( $response_body['error']['message'] ) ? $response_body['error']['message'] : 'Unknown error';
-	            return new WP_Error( 'file_creation_failed', __( 'Failed to create file: ' . $error_message, 'cstn-one-liners' ) );
-	        }
-
-	        if ( ! isset( $response_body['id'] ) ) {
-	            return new WP_Error( 'file_id_missing', __( 'File ID missing from response.', 'cstn-one-liners' ) );
-	        }
-
-	        return $response_body['id'];
-	    }
-	}
-
-
-
-
-
-
-	/**
-	 * Attach a single file to a vector store in the OpenAI system.
-	 *
-	 * @since 1.0.0
-	 * @param string $api_key        The OpenAI API key.
-	 * @param string $vector_store_id The vector store ID to which the file should be attached.
-	 * @param string $file_id        The file ID to attach to the vector store.
-	 * @return array|WP_Error        The vector store file object or WP_Error on failure.
-	 */
-	private function attach_file_to_vector_store( $api_key, $vector_store_id, $file_id ) {
-	    // Prepare the request body with a singular file ID.
-	    $body = array(
-	        'file_id' => $file_id,
-	    );
-
-	    // Make the API request to attach the file to the vector store.
-	    $response = wp_remote_post(
-	        "https://api.openai.com/v1/vector_stores/{$vector_store_id}/files",
-	        array(
-	            'headers' => array(
-	                'Authorization' => 'Bearer ' . $api_key,
-	                'Content-Type'  => 'application/json',
-	                'OpenAI-Beta'   => 'assistants=v2',
-	            ),
-	            'body'    => wp_json_encode( $body ),
-	        )
-	    );
-
-	    // Log the raw response for debugging purposes.
-	    // error_log( 'Attach File to Vector Store Response: ' . print_r( $response, true ) );
-
-	    // Check if the request resulted in an error.
-	    if ( is_wp_error( $response ) ) {
-	        return new WP_Error( 'attach_file_failed', __( 'Failed to attach file to vector store: ' . $response->get_error_message(), 'cstn-one-liners' ) );
-	    }
-
-	    // Parse the response body and check for errors.
-	    $response_body = json_decode( wp_remote_retrieve_body( $response ), true );
-
-	    // Log the parsed response body for debugging purposes.
-	    // error_log( 'Attach File Parsed Response: ' . print_r( $response_body, true ) );
-
-	    if ( isset( $response_body['error'] ) ) {
-	        return new WP_Error( 'attach_file_error', __( 'Error attaching file: ' . $response_body['error']['message'], 'cstn-one-liners' ) );
-	    }
-
-	    return $response_body;
-	}
-
-
-
-
-	/**
-	 * Store the generated vector in the vector store with metadata.
-	 *
-	 * @since 1.0.0
-	 * @param string $api_key         The OpenAI API key.
-	 * @param string $vector_store_id The vector store ID.
-	 * @param array  $vector          The generated vector to store.
-	 * @param string $entry_id        The Gravity Forms entry ID.
-	 * @param string $text            The original text content.
-	 * @return array|WP_Error The result of the storage operation or WP_Error on failure.
-	 */
-	private function store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry_id, $text ) {
-	    // Step 1: Create a file with the vector data.
-	    $file_id = $this->create_vector_file( $api_key, $vector, $entry_id, $text );
-	    if ( is_wp_error( $file_id ) ) {
-	        return $file_id;
-	    }
-
-	    // Step 2: Attach the file to the vector store.
-	    $attachment_result = $this->attach_file_to_vector_store( $api_key, $vector_store_id, $file_id );
-	    if ( is_wp_error( $attachment_result ) ) {
-	        return $attachment_result;
-	    }
-
-	    // Optionally, you can return or log the result
-	    return $attachment_result;
-	}
-
-
-
-
-		/**
 	 * Create a new thread in the OpenAI API.
 	 *
 	 * @since 1.0.0
@@ -475,7 +262,6 @@ class Cstn_One_Liners_Openai {
 			return 'Run failed or was cancelled.';
 		}
 	}
-
 	/**
 	 * Wait for the run to complete in the OpenAI API.
 	 *
@@ -688,13 +474,13 @@ class Cstn_One_Liners_Openai {
 	    $combined_text = implode( "\n", $all_sentences );
 
 	    // Log the combined text for debugging.
-	    // error_log( '[INFO] Combined text to send to assistant for cumulative summary: ' . $combined_text );
+	    error_log( '[INFO] Combined text to send to assistant for cumulative summary: ' . $combined_text );
 
 	    // Send the combined text to the assistant and run the thread.
 	    $final_summary_response = $this->add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $combined_text );
 
 	    // Log the response immediately after running the thread.
-	    // error_log( '[INFO] Final summary response from assistant after cumulative run: ' . print_r( $final_summary_response, true ) );
+	    error_log( '[INFO] Final summary response from assistant after cumulative run: ' . print_r( $final_summary_response, true ) );
 
 	    // Check if the assistant returned any error message or invalid format.
 	    if ( ! is_array( $final_summary_response ) || empty( $final_summary_response ) ) {
@@ -706,7 +492,7 @@ class Cstn_One_Liners_Openai {
 	    $final_summary = $this->fetch_messages_from_thread( $api_key, $thread_id );
 
 	    // Log the fetched summary for debugging.
-	    // error_log( '[INFO] Fetched cumulative summary after thread completion: ' . print_r( $final_summary, true ) );
+	    error_log( '[INFO] Fetched cumulative summary after thread completion: ' . print_r( $final_summary, true ) );
 
 	    // Check if the summary is in the expected format and return it.
 	    if ( is_array( $final_summary ) && isset( $final_summary['summary'] ) && is_array( $final_summary['summary'] ) ) {
@@ -719,39 +505,4 @@ class Cstn_One_Liners_Openai {
 	    return 'Failed to generate final summary. Invalid response format.';
 	}
 
-
-
-	/**
-	 * Validate if the given Assistant ID is valid using OpenAI's API.
-	 *
-	 * @since 1.0.0
-	 * @param string $assistant_id The Assistant ID to validate.
-	 * @param string $api_key      The OpenAI API key.
-	 * @return bool True if the Assistant ID is valid, false otherwise.
-	 */
-	public function is_assistant_valid( $assistant_id, $api_key ) {
-		if ( empty( $assistant_id ) || empty( $api_key ) ) {
-			return false;
-		}
-
-		$response = wp_remote_get(
-			"https://api.openai.com/v1/assistants/{$assistant_id}",
-			array(
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'OpenAI-Beta'   => 'assistants=v2',
-				),
-			)
-		);
-
-		if ( is_wp_error( $response ) ) {
-			return false;
-		}
-
-		$body = wp_remote_retrieve_body( $response );
-		$data = json_decode( $body, true );
-
-		return isset( $data['id'] ) && $data['id'] === $assistant_id;
-	}
 }
