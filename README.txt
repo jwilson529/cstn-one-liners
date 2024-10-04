@@ -34,3 +34,28 @@ Always return the three one-liners in the following **JSON structure**:
     "Third distinct one-liner based on the provided notes."
   ]
 }
+
+
+
+{
+  "name": "generate_one_liners",
+  "description": "Returns JSON with 3 distinct one-liners that summarize Centerstone based on strategic planning session notes.",
+  "strict": true,
+  "parameters": {
+    "type": "object",
+    "required": [
+      "discussion_notes"
+    ],
+    "properties": {
+      "discussion_notes": {
+        "type": "array",
+        "description": "List of notes from the strategic planning session to create one-liners from.",
+        "items": {
+          "type": "string",
+          "description": "Each note capturing key insights or messages from the session."
+        }
+      }
+    },
+    "additionalProperties": false
+  }
+}
