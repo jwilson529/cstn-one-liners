@@ -56,25 +56,34 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function enqueue_styles() {
-		wp_enqueue_style( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'css/cstn-one-liners-admin.css', array(), $this->version, 'all' );
+	    // Check if we are on the correct settings page.
+	    if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
+	        wp_enqueue_style( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'css/cstn-one-liners-admin.css', array(), $this->version, 'all' );
+	    }
 	}
 
 	/**
 	 * Enqueue admin scripts and localize the nonce for AJAX requests.
+	 *
+	 * @since 1.0.0
 	 */
 	public function enqueue_scripts() {
-	    wp_enqueue_script( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'js/cstn-one-liners-admin.js', array( 'jquery' ), $this->version, true );
+	    // Check if we are on the correct settings page.
+	    if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
+	        wp_enqueue_script( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'js/cstn-one-liners-admin.js', array( 'jquery' ), $this->version, true );
 
-	    // Localize script with the nonce value.
-	    wp_localize_script(
-	        $this->cstnOneLiners,
-	        'cstn_one_liners_vars',
-	        array(
-	            'ajaxurl'        => admin_url( 'admin-ajax.php' ),
-	            'cstn_ajax_nonce' => wp_create_nonce( 'cstn_ajax_nonce' ),
-	        )
-	    );
+	        // Localize script with the nonce value.
+	        wp_localize_script(
+	            $this->cstnOneLiners,
+	            'cstn_one_liners_vars',
+	            array(
+	                'ajaxurl'        => admin_url( 'admin-ajax.php' ),
+	                'cstn_ajax_nonce' => wp_create_nonce( 'cstn_ajax_nonce' ),
+	            )
+	        );
+	    }
 	}
+
 
 	/**
 	 * Add a settings page to the admin menu.
@@ -253,7 +262,7 @@ class Cstn_One_Liners_Admin {
 		}
 
 		// Get the form ID from the request.
-		$form_id = isset( $_POST['form_id'] ) ? intval( $_POST['form_id'] ) : 0;
+		$form_id = isset( $_POST['form_id'] ) ? intval( $_POST['form_id'] ) : 11;
 
 		// Check if the form ID is valid.
 		if ( empty( $form_id ) ) {

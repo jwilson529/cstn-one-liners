@@ -197,7 +197,7 @@ class Cstn_One_Liners_Vectors {
 
 
 	/**
-	 * Store the generated vector in the vector store with metadata.
+	 * Store the generated vector and original text in the vector store with metadata.
 	 *
 	 * @since 1.0.0
 	 * @param string $api_key         The OpenAI API key.
@@ -208,7 +208,14 @@ class Cstn_One_Liners_Vectors {
 	 * @return array|WP_Error The result of the storage operation or WP_Error on failure.
 	 */
 	public static function store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry_id, $text ) {
-	    // Step 1: Create a file with the vector data.
+	    // Create a file with both the vector and the original text.
+	    $file_content = json_encode( array(
+	        'vector'   => $vector,
+	        'entry_id' => $entry_id,
+	        'text'     => $text, // Include the original text along with the vector.
+	    ) );
+
+	    // Step 1: Create the file in OpenAI's system.
 	    $file_id = Cstn_One_Liners_Vectors::create_vector_file( $api_key, $vector, $entry_id, $text );
 	    if ( is_wp_error( $file_id ) ) {
 	        return $file_id;
@@ -220,9 +227,10 @@ class Cstn_One_Liners_Vectors {
 	        return $attachment_result;
 	    }
 
-	    // Optionally, you can return or log the result
+	    // Step 3: Return success or log the result.
 	    return $attachment_result;
 	}
+
 
 
 }

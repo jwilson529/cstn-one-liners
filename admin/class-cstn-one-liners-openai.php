@@ -25,11 +25,11 @@ class Cstn_One_Liners_Openai {
 	private $all_collected_sentences = array();
 
 	/**
-	 * AJAX handler to process entries, run them through the assistant, store embeddings, and display one-liners.
+	 * AJAX handler to generate embeddings for entries, store them in the vector store, and generate a final summary.
 	 *
 	 * @since 1.0.0
 	 */
-	public function cstn_process_entries() {
+	public function cstn_generate_embeddings() {
 	    // Verify the nonce to ensure the request is valid and secure.
 	    if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
 	        wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
@@ -70,22 +70,20 @@ class Cstn_One_Liners_Openai {
 	        return;
 	    }
 
-	    // Initialize an array to store one-liners and their embeddings.
-	    $one_liners = array();
-	    $entry_statuses = array(); // Track the status of each entry.
+	    // Initialize arrays to track the status of each entry and collect all texts used in embedding.
+	    $entry_statuses = array();
+	    $all_collected_sentences = array(); // This will hold all sentences used for embeddings.
 
-	    // Create a new thread for processing the entries through the assistant.
+	    // Create a new thread for the assistant.
 	    $thread_id = $this->create_thread( $api_key );
 	    if ( ! $thread_id ) {
 	        wp_send_json_error( __( 'Failed to create a new thread for processing.', 'cstn-one-liners' ) );
 	        return;
 	    }
 
-	    // Loop through each entry, process it through the assistant, and store the results.
+	    // Loop through each entry and generate an embedding.
 	    foreach ( $entries as $entry ) {
 	        $entry_id = $entry['id'];
-
-	        // Update entry status to 'Processing'.
 	        $entry_statuses[ $entry_id ] = 'Processing';
 
 	        // Retrieve fields from the entry and ensure they have default empty values if not set.
@@ -93,7 +91,7 @@ class Cstn_One_Liners_Openai {
 	        $field_3 = isset( $entry[3] ) ? $entry[3] : '';
 	        $field_4 = isset( $entry[4] ) ? $entry[4] : '';
 
-	        // Combine fields into a single query to send to the assistant.
+	        // Combine fields into a single text to send to the embedding endpoint.
 	        $entry_text = sprintf(
 	            "What brought you to Centerstone?\n%s\n\nHow does Centerstone support the community?\n%s\n\nIn a word, what does Noble Purpose mean to you?\n%s",
 	            $field_1,
@@ -101,79 +99,40 @@ class Cstn_One_Liners_Openai {
 	            $field_4
 	        );
 
-	        // Send the entry text to the assistant and get a response.
-	        $one_liner_response = $this->add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $entry_text );
+	        // Collect this text to be used in the final cumulative summary.
+	        $all_collected_sentences[] = $entry_text;
 
-	        // Check if the assistant response is valid.
-	        if ( is_wp_error( $one_liner_response ) ) {
-	            $one_liners[] = array(
-	                'entry_id' => $entry_id,
-	                'error'    => $one_liner_response->get_error_message(),
-	            );
-	            $entry_statuses[ $entry_id ] = 'Error';
+	        // 1. Generate the embedding for the entry text.
+	        $embedding = Cstn_One_Liners_Vectors::generate_vector_for_text( $api_key, $entry_text );
+	        if ( is_wp_error( $embedding ) ) {
+	            $entry_statuses[ $entry_id ] = 'Embedding Error: ' . $embedding->get_error_message();
 	            continue;
 	        }
 
-	        // Handle the one-liner response based on its array structure.
-	        if ( is_array( $one_liner_response ) && isset( $one_liner_response['summary'] ) && is_array( $one_liner_response['summary'] ) ) {
-	            $summary_text_array = $one_liner_response['summary'];
-
-	            // Generate a single vector embedding for the original entry text.
-	            $vector = Cstn_One_Liners_Vectors::generate_vector_for_text( $api_key, $entry_text );
-	            if ( is_wp_error( $vector ) ) {
-	                $one_liners[] = array(
-	                    'entry_id' => $entry_id,
-	                    'error'    => 'Embedding Error: ' . $vector->get_error_message(),
-	                );
-	                $entry_statuses[ $entry_id ] = 'Embedding Error';
-	                continue;
-	            }
-
-	            // Store the generated vector in the vector store.
-	            $storage_result = Cstn_One_Liners_Vectors::store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry_id, $entry_text );
-	            if ( is_wp_error( $storage_result ) ) {
-	                $one_liners[] = array(
-	                    'entry_id' => $entry_id,
-	                    'error'    => 'Vector Store Error: ' . $storage_result->get_error_message(),
-	                );
-	                $entry_statuses[ $entry_id ] = 'Vector Store Error';
-	                continue;
-	            }
-
-	            // Collect the three one-liners (sentences) from this entry.
-	            $this->all_collected_sentences = array_merge( $this->all_collected_sentences, $summary_text_array );
-
-	            // Add the processed summary text and vector to the final one-liners array.
-	            $one_liners[] = array(
-	                'entry_id'  => $entry_id,
-	                'one_liner' => $summary_text_array,
-	                'vector'    => $vector,
-	            );
-
-	            // Update status to 'Complete' after processing this entry.
-	            $entry_statuses[ $entry_id ] = 'Complete';
-	        } else {
-	            $one_liners[] = array(
-	                'entry_id' => $entry_id,
-	                'error'    => 'Missing or invalid summary in one-liner response.',
-	            );
-	            $entry_statuses[ $entry_id ] = 'Invalid Summary';
+	        // 2. Store the generated embedding in the vector store using `store_vector_in_vector_store`.
+	        $storage_result = Cstn_One_Liners_Vectors::store_vector_in_vector_store( $api_key, $vector_store_id, $embedding, $entry_id, $entry_text );
+	        if ( is_wp_error( $storage_result ) ) {
+	            $entry_statuses[ $entry_id ] = 'Vector Store Error: ' . $storage_result->get_error_message();
+	            continue;
 	        }
+
+	        // Update the status to 'Complete' for this entry.
+	        $entry_statuses[ $entry_id ] = 'Complete';
 	    }
 
-	    // Generate the final cumulative summary using all collected sentences.
-	    $final_summary = $this->generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $this->all_collected_sentences );
+	    // Step 3: Generate the final cumulative summary using all collected sentences.
+	    $final_summary = $this->generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $all_collected_sentences );
 
 	    // Prepare the response to be sent back to the client.
 	    $response = array(
-	        'entries'       => $one_liners,
-	        'final_summary' => $final_summary,
 	        'entry_statuses' => $entry_statuses, // Include the status of each entry.
+	        'final_summary'  => $final_summary,  // Include the final summary generated.
 	    );
 
-	    // Send the one-liners, final summary, and statuses back for display.
+	    // Send the statuses and final summary back for display.
 	    wp_send_json_success( $response );
 	}
+
 
 
 	/**
