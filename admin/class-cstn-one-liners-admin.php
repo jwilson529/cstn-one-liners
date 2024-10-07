@@ -246,48 +246,53 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function cstn_retrieve_entries() {
-	    // Verify the nonce to ensure the request is valid and secure.
-	    if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
-	        wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Verify the nonce to ensure the request is valid and secure.
+		if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
+			wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Get the form ID from the request.
-	    $form_id = isset( $_POST['form_id'] ) ? intval( $_POST['form_id'] ) : 0;
+		// Get the form ID from the request.
+		$form_id = isset( $_POST['form_id'] ) ? intval( $_POST['form_id'] ) : 0;
 
-	    // Check if the form ID is valid.
-	    if ( empty( $form_id ) ) {
-	        wp_send_json_error( __( 'Invalid Form ID. Please enter a valid Form ID and try again.', 'cstn-one-liners' ) );
-	        return;
-	    }
+		// Check if the form ID is valid.
+		if ( empty( $form_id ) ) {
+			wp_send_json_error( __( 'Invalid Form ID. Please enter a valid Form ID and try again.', 'cstn-one-liners' ) );
+			return;
+		}
 
-	    $search_criteria = array(
-	        'status' => 'active', // Only retrieve entries that are active.
-	    );
+		$search_criteria = array(
+			'status' => 'active', // Only retrieve entries that are active.
+		);
 
-	    $entries = GFAPI::get_entries( $form_id, $search_criteria );
-	    if ( is_wp_error( $entries ) ) {
-	        wp_send_json_error( __( 'Failed to retrieve entries: ' . $entries->get_error_message(), 'cstn-one-liners' ) );
-	        return;
-	    }
+		$entries = GFAPI::get_entries( $form_id, $search_criteria );
+		if ( is_wp_error( $entries ) ) {
+			wp_send_json_error( __( 'Failed to retrieve entries: ' . $entries->get_error_message(), 'cstn-one-liners' ) );
+			return;
+		}
 
-	    // Create a table to display only the IDs with links.
-	    ob_start();
-	    echo '<table class="wp-list-table widefat fixed striped">';
-	    echo '<thead><tr><th>ID</th><th>Link</th></tr></thead><tbody>';
-	    foreach ( $entries as $entry ) {
-	        $entry_id = esc_html( $entry['id'] );
-	        $entry_url = admin_url( "admin.php?page=gf_entries&view=entry&id={$form_id}&lid={$entry_id}" );
-	        echo '<tr>';
-	        echo '<td>' . $entry_id . '</td>';
-	        echo '<td><a href="' . esc_url( $entry_url ) . '" target="_blank">' . __( 'View Entry', 'cstn-one-liners' ) . '</a></td>';
-	        echo '</tr>';
-	    }
-	    echo '</tbody></table>';
-	    $output = ob_get_clean();
+		// Create a table to display the IDs, links, and status.
+		ob_start();
+		echo '<table class="wp-list-table widefat fixed striped">';
+		echo '<thead><tr><th>ID</th><th>Link</th><th>Status</th></tr></thead><tbody>';
+		foreach ( $entries as $entry ) {
+			$entry_id  = esc_html( $entry['id'] );
+			$entry_url = admin_url( "admin.php?page=gf_entries&view=entry&id={$form_id}&lid={$entry_id}" );
 
-	    // Return the generated table as the response.
-	    wp_send_json_success( $output );
+			// Placeholder status message.
+			$status = 'Pending';
+
+			echo '<tr id="entry-' . $entry_id . '" data-entry-id="' . $entry_id . '">';
+			echo '<td>' . $entry_id . '</td>';
+			echo '<td><a href="' . esc_url( $entry_url ) . '" target="_blank">' . __( 'View Entry', 'cstn-one-liners' ) . '</a></td>';
+			echo '<td class="entry-status">' . esc_html( $status ) . '</td>'; // Add the new Status column here.
+			echo '</tr>';
+		}
+		echo '</tbody></table>';
+		$output = ob_get_clean();
+
+		// Return the generated table as the response.
+		wp_send_json_success( $output );
 	}
 
 
