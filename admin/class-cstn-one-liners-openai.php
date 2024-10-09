@@ -24,114 +24,166 @@ class Cstn_One_Liners_Openai {
 	// Holds all collected sentences across entries.
 	private $all_collected_sentences = array();
 
+	public function cstn_process_all_entries() {
+	    $api_key         = get_option( 'cstn_one_liners_api_key' );
+	    $assistant_id    = get_option( 'cstn_one_liners_assistant_id' );
+		$thread_id = $this->create_thread( $api_key ); 
+		$summary_response = $this->generate_final_cumulative_summary($api_key, $assistant_id, $thread_id);
+
+		// Prepare final response
+		$final_response = array(
+		    'success' => true,
+		    'entry_statuses' => "1",
+		    'final_summary' => $summary_response,
+		    'partial' => false
+		);
+
+		error_log('[INFO] Final response prepared: ' . print_r($final_response, true));
+		wp_send_json($final_response);
+	}
+
 	/**
-	 * AJAX handler to generate embeddings for entries, store them in the vector store, and generate a final summary.
+	 * AJAX handler to process all entries one-by-one, store embeddings, and generate a final summary from the vector store.
 	 *
 	 * @since 1.0.0
 	 */
-	public function cstn_generate_embeddings() {
-	    // Verify the nonce to ensure the request is valid and secure.
-	    if ( ! isset( $_POST['security'] ) || ! check_ajax_referer( 'cstn_ajax_nonce', 'security', false ) ) {
-	        wp_send_json_error( __( 'Nonce verification failed. Please refresh the page and try again.', 'cstn-one-liners' ) );
+	public function cstn_process_all_entries_backup() {
+	    error_log('[INFO] Starting cstn_process_all_entries AJAX handler.');
+
+	    ini_set('max_execution_time', 300);
+	    ini_set('memory_limit', '256M');
+
+	    // Verify nonce
+	    if (!isset($_POST['security']) || !check_ajax_referer('cstn_ajax_nonce', 'security', false)) {
+	        error_log('[ERROR] Security check failed.');
+	        $this->send_json_with_flush(array(
+	            'success' => false,
+	            'message' => 'Security verification failed. Please refresh the page and try again.'
+	        ));
 	        return;
 	    }
 
-	    // Retrieve necessary options from the plugin settings.
-	    $api_key         = get_option( 'cstn_one_liners_api_key' );
-	    $assistant_id    = get_option( 'cstn_one_liners_assistant_id' );
-	    $vector_store_id = get_option( 'cstn_one_liners_vector_store_id' );
-
-	    // Validate the presence of essential configuration options.
-	    if ( empty( $api_key ) || empty( $assistant_id ) || empty( $vector_store_id ) ) {
-	        wp_send_json_error( __( 'API Key, Assistant ID, or Vector Store ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
+	    // Validate entry IDs
+	    $entry_ids = isset($_POST['entry_ids']) ? $_POST['entry_ids'] : array();
+	    if (empty($entry_ids) || !is_array($entry_ids)) {
+	        error_log('[ERROR] No entry IDs provided or invalid format.');
+	        $this->send_json_with_flush(array(
+	            'success' => false,
+	            'message' => 'No entry IDs provided or invalid format.'
+	        ));
 	        return;
 	    }
 
-	    // Retrieve the form ID from the plugin settings.
-	    $form_id = get_option( 'cstn_one_liners_form_id' );
-	    if ( empty( $form_id ) ) {
-	        wp_send_json_error( __( 'Form ID is not configured. Please configure the settings first.', 'cstn-one-liners' ) );
+	    // Validate API settings
+	    $api_key = get_option('cstn_one_liners_api_key');
+	    $assistant_id = get_option('cstn_one_liners_assistant_id');
+	    $vector_store_id = get_option('cstn_one_liners_vector_store_id');
+
+	    if (empty($api_key) || empty($vector_store_id) || empty($assistant_id)) {
+	        error_log('[ERROR] Missing API configuration.');
+	        $this->send_json_with_flush(array(
+	            'success' => false,
+	            'message' => 'API configuration missing. Please check settings.'
+	        ));
 	        return;
 	    }
 
-	    // Retrieve only active entries from the specified Gravity Forms form.
-	    $search_criteria = array( 'status' => 'active' );
-	    $entries         = GFAPI::get_entries( $form_id, $search_criteria );
-
-	    // Handle potential errors when fetching entries.
-	    if ( is_wp_error( $entries ) ) {
-	        wp_send_json_error( __( 'Failed to retrieve entries: ' . $entries->get_error_message(), 'cstn-one-liners' ) );
-	        return;
-	    }
-
-	    // Check if there are any entries in the form.
-	    if ( empty( $entries ) ) {
-	        wp_send_json_error( __( 'No entries found in the form.', 'cstn-one-liners' ) );
-	        return;
-	    }
-
-	    // Initialize arrays to track the status of each entry and collect all texts used in embedding.
 	    $entry_statuses = array();
-	    $all_collected_sentences = array(); // This will hold all sentences used for embeddings.
 
-	    // Create a new thread for the assistant.
-	    $thread_id = $this->create_thread( $api_key );
-	    if ( ! $thread_id ) {
-	        wp_send_json_error( __( 'Failed to create a new thread for processing.', 'cstn-one-liners' ) );
-	        return;
-	    }
+	    // Process entries
+	    foreach ($entry_ids as $entry_id) {
+	        error_log("[INFO] Processing entry ID: $entry_id");
+	        
+	        $entry_statuses[$entry_id] = 'Processing...';
+	        $this->send_json_with_flush(array(
+	            'success' => true,
+	            'entry_statuses' => $entry_statuses,
+	            'partial' => true
+	        ));
 
-	    // Loop through each entry and generate an embedding.
-	    foreach ( $entries as $entry ) {
-	        $entry_id = $entry['id'];
-	        $entry_statuses[ $entry_id ] = 'Processing';
+	        $entry = GFAPI::get_entry($entry_id);
+	        if (is_wp_error($entry)) {
+	            error_log("[ERROR] Failed to retrieve entry $entry_id: " . $entry->get_error_message());
+	            $entry_statuses[$entry_id] = 'Failed to retrieve entry';
+	            continue;
+	        }
 
-	        // Retrieve fields from the entry and ensure they have default empty values if not set.
-	        $field_1 = isset( $entry[1] ) ? $entry[1] : '';
-	        $field_3 = isset( $entry[3] ) ? $entry[3] : '';
-	        $field_4 = isset( $entry[4] ) ? $entry[4] : '';
-
-	        // Combine fields into a single text to send to the embedding endpoint.
+	        // Generate entry text
 	        $entry_text = sprintf(
 	            "What brought you to Centerstone?\n%s\n\nHow does Centerstone support the community?\n%s\n\nIn a word, what does Noble Purpose mean to you?\n%s",
-	            $field_1,
-	            $field_3,
-	            $field_4
+	            isset($entry[1]) ? $entry[1] : '',
+	            isset($entry[3]) ? $entry[3] : '',
+	            isset($entry[4]) ? $entry[4] : ''
 	        );
 
-	        // Collect this text to be used in the final cumulative summary.
-	        $all_collected_sentences[] = $entry_text;
-
-	        // 1. Generate the embedding for the entry text.
-	        $embedding = Cstn_One_Liners_Vectors::generate_vector_for_text( $api_key, $entry_text );
-	        if ( is_wp_error( $embedding ) ) {
-	            $entry_statuses[ $entry_id ] = 'Embedding Error: ' . $embedding->get_error_message();
+	        // Generate and store embedding
+	        $embedding = Cstn_One_Liners_Vectors::generate_vector_for_text($api_key, $entry_text);
+	        if (is_wp_error($embedding)) {
+	            error_log("[ERROR] Failed to generate embedding for entry $entry_id: " . $embedding->get_error_message());
+	            $entry_statuses[$entry_id] = 'Failed to generate embedding';
 	            continue;
 	        }
 
-	        // 2. Store the generated embedding in the vector store using `store_vector_in_vector_store`.
-	        $storage_result = Cstn_One_Liners_Vectors::store_vector_in_vector_store( $api_key, $vector_store_id, $embedding, $entry_id, $entry_text );
-	        if ( is_wp_error( $storage_result ) ) {
-	            $entry_statuses[ $entry_id ] = 'Vector Store Error: ' . $storage_result->get_error_message();
+	        $storage_result = Cstn_One_Liners_Vectors::store_vector_in_vector_store(
+	            $api_key,
+	            $vector_store_id,
+	            $embedding,
+	            $entry_id,
+	            $entry_text
+	        );
+
+	        if (is_wp_error($storage_result)) {
+	            error_log("[ERROR] Failed to store vector for entry $entry_id: " . $storage_result->get_error_message());
+	            $entry_statuses[$entry_id] = 'Failed to store vector';
 	            continue;
 	        }
 
-	        // Update the status to 'Complete' for this entry.
-	        $entry_statuses[ $entry_id ] = 'Complete';
+	        $entry_statuses[$entry_id] = 'Complete';
+	        $this->send_json_with_flush(array(
+	            'success' => true,
+	            'entry_statuses' => $entry_statuses,
+	            'partial' => true
+	        ));
 	    }
 
-	    // Step 3: Generate the final cumulative summary using all collected sentences.
-	    $final_summary = $this->generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $all_collected_sentences );
+	    // Generate final summary
+	    error_log('[INFO] Generating final cumulative summary.');
+	    $thread_id = $this->create_thread($api_key);
+	    $summary_response = $this->generate_final_cumulative_summary($api_key, $assistant_id, $thread_id);
 
-	    // Prepare the response to be sent back to the client.
-	    $response = array(
-	        'entry_statuses' => $entry_statuses, // Include the status of each entry.
-	        'final_summary'  => $final_summary,  // Include the final summary generated.
+	    // Prepare final response
+	    $final_response = array(
+	        'success' => true,
+	        'entry_statuses' => $entry_statuses,
+	        'final_summary' => $summary_response,
+	        'partial' => false
 	    );
 
-	    // Send the statuses and final summary back for display.
-	    wp_send_json_success( $response );
+	    error_log('[INFO] Final response prepared: ' . print_r($final_response, true));
+	    $this->send_json_with_flush($final_response);
 	}
+
+	/**
+	 * Send JSON response and flush output buffers.
+	 *
+	 * @param array $response The response data to send.
+	 */
+	private function send_json_with_flush( $response ) {
+	    // Ensure output buffering is started if not already active.
+	    if ( ob_get_level() === 0 ) {
+	        ob_start(); // Start output buffering.
+	    }
+
+	    // Send JSON response.
+	    echo json_encode( $response );
+
+	    // Flush the output buffers to send the response immediately.
+	    ob_flush(); // Flush the PHP output buffer.
+	    flush();    // Flush the system output buffer.
+	}
+
+
+
 
 
 
@@ -167,75 +219,83 @@ class Cstn_One_Liners_Openai {
 		return $response_body['id'];
 	}
 
-	/**
-	 * Add a message and run the thread in the OpenAI API.
-	 *
-	 * @since 1.0.0
-	 * @param string $api_key      The OpenAI API key.
-	 * @param string $thread_id    The thread ID.
-	 * @param string $assistant_id The assistant ID.
-	 * @param string $query        The query to add as a message.
-	 * @return mixed The result of the run or an error message.
-	 */
 	public function add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $query ) {
-		// Step 3: Add a message to the thread.
-		$message_api_url = "https://api.openai.com/v1/threads/{$thread_id}/messages";
-		$body            = wp_json_encode(
-			array(
-				'role'    => 'user',
-				'content' => $query,
-			)
-		);
-		$response        = wp_remote_post(
-			$message_api_url,
-			array(
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'OpenAI-Beta'   => 'assistants=v2',
-				),
-				'body'    => $body,
-			)
-		);
+	    $message_api_url = "https://api.openai.com/v1/threads/{$thread_id}/messages";
+	    $body            = wp_json_encode(
+	        array(
+	            'role'    => 'user',
+	            'content' => $query,
+	        )
+	    );
 
-		if ( is_wp_error( $response ) ) {
-			return 'Failed to add message.';
-		}
+	    error_log( '[INFO] Sending message to thread. URL: ' . $message_api_url );
+	    error_log( '[INFO] Message body: ' . $body );
 
-		// Step 4: Run the thread.
-		$run_api_url = "https://api.openai.com/v1/threads/{$thread_id}/runs";
-		$body        = wp_json_encode(
-			array(
-				'assistant_id' => $assistant_id,
-			)
-		);
-		$response    = wp_remote_post(
-			$run_api_url,
-			array(
-				'headers' => array(
-					'Content-Type'  => 'application/json',
-					'Authorization' => 'Bearer ' . $api_key,
-					'OpenAI-Beta'   => 'assistants=v2',
-				),
-				'body'    => $body,
-			)
-		);
+	    $response        = wp_remote_post(
+	        $message_api_url,
+	        array(
+	            'headers' => array(
+	                'Content-Type'  => 'application/json',
+	                'Authorization' => 'Bearer ' . $api_key,
+	                'OpenAI-Beta'   => 'assistants=v2',
+	            ),
+	            'body'    => $body,
+	        )
+	    );
 
-		if ( is_wp_error( $response ) ) {
-			return 'Failed to run thread.';
-		}
+	    if ( is_wp_error( $response ) ) {
+	        error_log( '[ERROR] Failed to add message. Error: ' . $response->get_error_message() );
+	        return 'Failed to add message.';
+	    }
 
-		$response_body    = wp_remote_retrieve_body( $response );
-		$decoded_response = json_decode( $response_body, true );
+	    $response_body = wp_remote_retrieve_body( $response );
+	    error_log( '[INFO] Response from adding message: ' . $response_body );
 
-		if ( 'queued' === $decoded_response['status'] || 'running' === $decoded_response['status'] ) {
-			return $this->wait_for_run_completion( $api_key, $decoded_response['id'], $thread_id );
-		} elseif ( 'completed' === $decoded_response['status'] ) {
-			return $this->fetch_messages_from_thread( $api_key, $thread_id );
-		} else {
-			return 'Run failed or was cancelled.';
-		}
+	    // Step 4: Run the thread.
+	    $run_api_url = "https://api.openai.com/v1/threads/{$thread_id}/runs";
+	    $body        = wp_json_encode(
+	        array(
+	            'assistant_id' => $assistant_id,
+	        )
+	    );
+	    
+	    error_log( '[INFO] Running thread. URL: ' . $run_api_url );
+	    error_log( '[INFO] Run body: ' . $body );
+
+	    $response    = wp_remote_post(
+	        $run_api_url,
+	        array(
+	            'headers' => array(
+	                'Content-Type'  => 'application/json',
+	                'Authorization' => 'Bearer ' . $api_key,
+	                'OpenAI-Beta'   => 'assistants=v2',
+	            ),
+	            'body'    => $body,
+	        )
+	    );
+
+	    if ( is_wp_error( $response ) ) {
+	        error_log( '[ERROR] Failed to run thread. Error: ' . $response->get_error_message() );
+	        return 'Failed to run thread.';
+	    }
+
+	    $response_body    = wp_remote_retrieve_body( $response );
+	    $decoded_response = json_decode( $response_body, true );
+
+	    error_log( '[INFO] Response from running thread: ' . print_r( $decoded_response, true ) );
+
+	    if ( 'queued' === $decoded_response['status'] || 'running' === $decoded_response['status'] ) {
+	        error_log( '[INFO] Assistant is processing the request. Status: ' . $decoded_response['status'] );
+	        return $this->wait_for_run_completion( $api_key, $decoded_response['id'], $thread_id );
+	    } elseif ( 'completed' === $decoded_response['status'] ) {
+	        error_log( '[INFO] Run completed. Fetching messages from thread.' );
+	        return $this->fetch_messages_from_thread( $api_key, $thread_id );
+	    } else {
+	        error_log( '[ERROR] Run failed or was cancelled. Response: ' . print_r( $decoded_response, true ) );
+	        return 'Run failed or was cancelled.';
+	    }
 	}
+
 	/**
 	 * Wait for the run to complete in the OpenAI API.
 	 *
@@ -245,48 +305,71 @@ class Cstn_One_Liners_Openai {
 	 * @param string $thread_id The thread ID.
 	 * @return mixed The run result or an error message.
 	 */
-	private function wait_for_run_completion( $api_key, $run_id, $thread_id ) {
-		$status_check_url = "https://api.openai.com/v1/threads/{$thread_id}/runs/{$run_id}";
+	private function wait_for_run_completion($api_key, $run_id, $thread_id) {
+	    $status_check_url = "https://api.openai.com/v1/threads/{$thread_id}/runs/{$run_id}";
+	    error_log('[INFO] Checking run status at URL: ' . $status_check_url);
 
-		$attempts     = 0;
-		$max_attempts = 20;
+	    $attempts = 0;
+	    $max_attempts = 20;
 
-		while ( $attempts < $max_attempts ) {
-			sleep( 5 );
-			$response = wp_remote_get(
-				$status_check_url,
-				array(
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $api_key,
-						'OpenAI-Beta'   => 'assistants=v2',
-					),
-				)
-			);
+	    while ($attempts < $max_attempts) {
+	        sleep(5);
+	        $response = wp_remote_get(
+	            $status_check_url,
+	            array(
+	                'headers' => array(
+	                    'Authorization' => 'Bearer ' . $api_key,
+	                    'OpenAI-Beta'   => 'assistants=v2',
+	                ),
+	            )
+	        );
 
-			if ( is_wp_error( $response ) ) {
-				return 'Failed to check run status.';
-			}
+	        if (is_wp_error($response)) {
+	            $error_message = $response->get_error_message();
+	            error_log('[ERROR] Failed to check run status: ' . $error_message);
+	            return 'Failed to check run status: ' . $error_message;
+	        }
 
-			$response_body    = wp_remote_retrieve_body( $response );
-			$decoded_response = json_decode( $response_body, true );
+	        $response_code = wp_remote_retrieve_response_code($response);
+	        if ($response_code !== 200) {
+	            error_log('[ERROR] Non-200 response code: ' . $response_code);
+	            error_log('[ERROR] Response body: ' . wp_remote_retrieve_body($response));
+	            return 'Error checking run status. Response code: ' . $response_code;
+	        }
 
-			if ( isset( $decoded_response['error'] ) ) {
-				return 'Error retrieving run status: ' . $decoded_response['error']['message'];
-			}
+	        $response_body = wp_remote_retrieve_body($response);
+	        $decoded_response = json_decode($response_body, true);
 
-			if ( isset( $decoded_response['status'] ) && 'completed' === $decoded_response['status'] ) {
-				$this->cancel_run( $api_key, $thread_id, $decoded_response['id'] );
-				return $this->fetch_messages_from_thread( $api_key, $thread_id );
-			} elseif ( isset( $decoded_response['status'] ) && ( 'failed' === $decoded_response['status'] || 'cancelled' === $decoded_response['status'] ) ) {
-				return 'Run failed or was cancelled.';
-			} elseif ( isset( $decoded_response['status'] ) && 'requires_action' === $decoded_response['status'] ) {
-				return $this->handle_requires_action( $api_key, $run_id, $thread_id, $decoded_response['required_action'] );
-			}
+	        error_log('[DEBUG] Run status response: ' . print_r($decoded_response, true));
 
-			++$attempts;
-		}
+	        if (!isset($decoded_response['status'])) {
+	            error_log('[ERROR] Status field missing in response');
+	            return 'Invalid response format from run status check';
+	        }
 
-		return 'Run did not complete in expected time.';
+	        switch ($decoded_response['status']) {
+	            case 'completed':
+	                error_log('[INFO] Run completed successfully');
+	                return $this->fetch_messages_from_thread($api_key, $thread_id);
+	            
+	            case 'failed':
+	            case 'cancelled':
+	                error_log('[ERROR] Run ' . $decoded_response['status']);
+	                return 'Run ' . $decoded_response['status'];
+	            
+	            case 'requires_action':
+	                error_log('[INFO] Run requires action');
+	                return $this->handle_requires_action($api_key, $run_id, $thread_id, $decoded_response['required_action']);
+	            
+	            default:
+	                error_log('[INFO] Run still in progress. Status: ' . $decoded_response['status']);
+	        }
+
+	        $attempts++;
+	    }
+
+	    error_log('[ERROR] Run did not complete within the maximum number of attempts');
+	    return 'Run did not complete in expected time.';
 	}
 
 	/**
@@ -300,41 +383,58 @@ class Cstn_One_Liners_Openai {
 	 * @return mixed The run result or an error message.
 	 */
 	private function handle_requires_action( $api_key, $run_id, $thread_id, $required_action ) {
-		if ( 'submit_tool_outputs' === $required_action['type'] ) {
-			$tool_calls   = $required_action['submit_tool_outputs']['tool_calls'];
-			$tool_outputs = array();
+	    error_log('[INFO] Handling requires_action: ' . print_r($required_action, true));
 
-			foreach ( $tool_calls as $tool_call ) {
-				$output = wp_json_encode( array( 'success' => 'true' ) );
+	    if ( 'submit_tool_outputs' === $required_action['type'] ) {
+	        $tool_calls   = $required_action['submit_tool_outputs']['tool_calls'];
+	        $tool_outputs = array();
 
-				$tool_outputs[] = array(
-					'tool_call_id' => $tool_call['id'],
-					'output'       => $output,
-				);
-			}
+	        foreach ( $tool_calls as $tool_call ) {
+	            // Log each tool call for debugging
+	            error_log('[INFO] Handling tool call: ' . print_r($tool_call, true));
 
-			$submit_tool_outputs_url = "https://api.openai.com/v1/threads/{$thread_id}/runs/{$run_id}/submit_tool_outputs";
-			$response                = wp_remote_post(
-				$submit_tool_outputs_url,
-				array(
-					'headers' => array(
-						'Authorization' => 'Bearer ' . $api_key,
-						'OpenAI-Beta'   => 'assistants=v2',
-						'Content-Type'  => 'application/json',
-					),
-					'body'    => wp_json_encode( array( 'tool_outputs' => $tool_outputs ) ),
-				)
-			);
+	            // Customize the tool output based on tool_call requirements
+	            $output = wp_json_encode( array( 'success' => 'true', 'message' => 'Output for ' . $tool_call['id'] ) );
 
-			if ( is_wp_error( $response ) ) {
-				return 'Failed to submit tool outputs.';
-			}
+	            $tool_outputs[] = array(
+	                'tool_call_id' => $tool_call['id'],
+	                'output'       => $output,
+	            );
+	        }
 
-			return $this->wait_for_run_completion( $api_key, $run_id, $thread_id );
-		}
+	        error_log('[INFO] Prepared tool outputs: ' . print_r($tool_outputs, true));
 
-		return 'Unhandled requires_action.';
+	        $submit_tool_outputs_url = "https://api.openai.com/v1/threads/{$thread_id}/runs/{$run_id}/submit_tool_outputs";
+	        
+	        // Increase the timeout to 30 seconds for this request
+	        $response = wp_remote_post(
+	            $submit_tool_outputs_url,
+	            array(
+	                'headers' => array(
+	                    'Authorization' => 'Bearer ' . $api_key,
+	                    'OpenAI-Beta'   => 'assistants=v2',
+	                    'Content-Type'  => 'application/json',
+	                ),
+	                'body'    => wp_json_encode( array( 'tool_outputs' => $tool_outputs ) ),
+	                'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
+	            )
+	        );
+
+	        if ( is_wp_error( $response ) ) {
+	            error_log('[ERROR] Failed to submit tool outputs. Error: ' . $response->get_error_message());
+	            return 'Failed to submit tool outputs.';
+	        }
+
+	        error_log('[INFO] Tool outputs submitted successfully.');
+
+	        return $this->wait_for_run_completion( $api_key, $run_id, $thread_id );
+	    }
+
+	    error_log('[ERROR] Unhandled requires_action: ' . print_r($required_action, true));
+	    return 'Unhandled requires_action.';
 	}
+
+
 
 	/**
 	 * Fetch messages from the thread and return the one containing the summary.
@@ -344,8 +444,9 @@ class Cstn_One_Liners_Openai {
 	 * @param string $thread_id The thread ID.
 	 * @return mixed The summary message if found, or an error message.
 	 */
-	public function fetch_messages_from_thread( $api_key, $thread_id ) {
+	public function fetch_messages_from_thread($api_key, $thread_id) {
 	    $messages_url = "https://api.openai.com/v1/threads/{$thread_id}/messages";
+	    error_log('[INFO] Fetching messages from thread. URL: ' . $messages_url);
 
 	    $response = wp_remote_get(
 	        $messages_url,
@@ -358,51 +459,57 @@ class Cstn_One_Liners_Openai {
 	        )
 	    );
 
-	    if ( is_wp_error( $response ) ) {
-	        return 'Failed to fetch messages.';
+	    if (is_wp_error($response)) {
+	        $error_message = $response->get_error_message();
+	        error_log('[ERROR] Failed to fetch messages: ' . $error_message);
+	        return 'Failed to fetch messages: ' . $error_message;
 	    }
 
-	    $response_body    = wp_remote_retrieve_body( $response );
-	    $decoded_response = json_decode( $response_body, true );
+	    $response_code = wp_remote_retrieve_response_code($response);
+	    if ($response_code !== 200) {
+	        error_log('[ERROR] Non-200 response code when fetching messages: ' . $response_code);
+	        error_log('[ERROR] Response body: ' . wp_remote_retrieve_body($response));
+	        return 'Error fetching messages. Response code: ' . $response_code;
+	    }
 
-	    // Log the full response for debugging purposes.
-	    // error_log( '[DEBUG] Full messages response: ' . print_r( $decoded_response, true ) );
+	    $response_body = wp_remote_retrieve_body($response);
+	    $decoded_response = json_decode($response_body, true);
 
-	    if ( ! isset( $decoded_response['data'] ) ) {
-	        return 'No messages found.';
+	    error_log('[DEBUG] Messages response: ' . print_r($decoded_response, true));
+
+	    if (!isset($decoded_response['data']) || empty($decoded_response['data'])) {
+	        error_log('[ERROR] No messages found in response');
+	        return 'No messages found in thread response.';
 	    }
 
 	    $messages = $decoded_response['data'];
-	    $summary_message = null;
-
-	    // Iterate through each message and look for one that contains a `summary` key.
-	    foreach ( $messages as $message ) {
-	        foreach ( $message['content'] as $content ) {
-	            if ( 'text' === $content['type'] ) {
-	                $decoded_text = json_decode( $content['text']['value'], true );
-
-	                // Log each decoded text for analysis.
-	                error_log( '[DEBUG] Decoded message content: ' . print_r( $decoded_text, true ) );
-
-	                // If this message contains a `summary` key, consider it as the final cumulative summary.
-	                if ( is_array( $decoded_text ) && isset( $decoded_text['summary'] ) ) {
-	                    $summary_message = $decoded_text;
-	                    break 2; // Exit both loops once we find the correct message.
+	    foreach ($messages as $message) {
+	        if ($message['role'] === 'assistant' && !empty($message['content'])) {
+	            foreach ($message['content'] as $content) {
+	                if ($content['type'] === 'text') {
+	                    $text_value = $content['text']['value'];
+	                    error_log('[DEBUG] Processing message text: ' . $text_value);
+	                    
+	                    // Try to extract JSON from code block if present
+	                    if (preg_match('/```json\s*(.*?)\s*```/s', $text_value, $matches)) {
+	                        $json_string = $matches[1];
+	                    } else {
+	                        $json_string = $text_value;
+	                    }
+	                    
+	                    $decoded_json = json_decode($json_string, true);
+	                    if (json_last_error() === JSON_ERROR_NONE && isset($decoded_json['summary'])) {
+	                        error_log('[INFO] Successfully extracted summary');
+	                        return $decoded_json;
+	                    }
 	                }
 	            }
 	        }
 	    }
 
-	    // Return the summary message if found.
-	    if ( ! is_null( $summary_message ) ) {
-	        // error_log( '[INFO] Successfully retrieved the summary: ' . print_r( $summary_message, true ) );
-	        return $summary_message;
-	    } else {
-	        // error_log( '[ERROR] No valid summary message found in thread messages.' );
-	        return 'Failed to generate final summary. Invalid response format.';
-	    }
+	    error_log('[ERROR] No valid summary found in messages');
+	    return 'Failed to find valid summary in messages.';
 	}
-
 
 	/**
 	 * Cancel the run when complete.
@@ -434,49 +541,75 @@ class Cstn_One_Liners_Openai {
 	}
 
 	/**
-	 * Generate the final cumulative summary using all collected sentences.
+	 * Generate the final cumulative summary using the vector store.
 	 *
-	 * @since 1.0.0
-	 * @param string $api_key        The OpenAI API key.
-	 * @param string $assistant_id   The assistant ID.
-	 * @param string $thread_id      The thread ID.
-	 * @param array  $all_sentences  The array of all collected sentences from each entry.
-	 * @return mixed The final cumulative summary as an array or an error message.
+	 * @param string $api_key The OpenAI API key.
+	 * @param string $assistant_id The assistant ID.
+	 * @param string $thread_id The thread ID.
+	 * @return array|string The final summary array or an error message string.
 	 */
-	private function generate_final_cumulative_summary( $api_key, $assistant_id, $thread_id, $all_sentences ) {
-	    // Combine all collected sentences into a single block of text to send to the assistant.
-	    $combined_text = implode( "\n", $all_sentences );
+	private function generate_final_cumulative_summary($api_key, $assistant_id, $thread_id) {
+	    $minimal_trigger_message = "true";
+	    error_log('[INFO] Sending minimal trigger message to assistant for cumulative summary.');
 
-	    // Log the combined text for debugging.
-	    error_log( '[INFO] Combined text to send to assistant for cumulative summary: ' . $combined_text );
+	    // Send the message and get the response
+	    $response = $this->add_message_and_run_thread($api_key, $thread_id, $assistant_id, $minimal_trigger_message);
+	    error_log('[DEBUG] Full response from assistant: ' . print_r($response, true));
 
-	    // Send the combined text to the assistant and run the thread.
-	    $final_summary_response = $this->add_message_and_run_thread( $api_key, $thread_id, $assistant_id, $combined_text );
+	    // Fetch messages from the thread
+	    $messages_url = "https://api.openai.com/v1/threads/{$thread_id}/messages";
+	    $fetch_response = wp_remote_get(
+	        $messages_url,
+	        array(
+	            'headers' => array(
+	                'Authorization' => 'Bearer ' . $api_key,
+	                'Content-Type'  => 'application/json',
+	                'OpenAI-Beta'   => 'assistants=v2',
+	            ),
+	        )
+	    );
 
-	    // Log the response immediately after running the thread.
-	    error_log( '[INFO] Final summary response from assistant after cumulative run: ' . print_r( $final_summary_response, true ) );
-
-	    // Check if the assistant returned any error message or invalid format.
-	    if ( ! is_array( $final_summary_response ) || empty( $final_summary_response ) ) {
-	        // error_log( '[ERROR] Cumulative summary run did not return a valid response. Check thread execution.' );
-	        return 'Failed to generate final summary. Invalid response format or empty response.';
+	    if (is_wp_error($fetch_response)) {
+	        error_log('[ERROR] Failed to fetch messages: ' . $fetch_response->get_error_message());
+	        return 'Failed to fetch messages.';
 	    }
 
-	    // Fetch the messages from the thread to confirm the summary.
-	    $final_summary = $this->fetch_messages_from_thread( $api_key, $thread_id );
+	    $response_body = wp_remote_retrieve_body($fetch_response);
+	    $messages = json_decode($response_body, true);
 
-	    // Log the fetched summary for debugging.
-	    error_log( '[INFO] Fetched cumulative summary after thread completion: ' . print_r( $final_summary, true ) );
-
-	    // Check if the summary is in the expected format and return it.
-	    if ( is_array( $final_summary ) && isset( $final_summary['summary'] ) && is_array( $final_summary['summary'] ) ) {
-	        // error_log( '[INFO] Final cumulative summary retrieved successfully: ' . print_r( $final_summary['summary'], true ) );
-	        return $final_summary['summary'];
+	    if (!isset($messages['data']) || empty($messages['data'])) {
+	        error_log('[ERROR] No messages found in thread.');
+	        return 'No messages found in thread.';
 	    }
 
-	    // If not in expected format, return an error message.
-	    // error_log( '[ERROR] Final cumulative summary retrieval failed or returned unexpected format.' );
-	    return 'Failed to generate final summary. Invalid response format.';
+	    // Look for the JSON response in the latest assistant message
+	    foreach ($messages['data'] as $message) {
+	        if ($message['role'] === 'assistant') {
+	            foreach ($message['content'] as $content) {
+	                if ($content['type'] === 'text') {
+	                    $text_value = $content['text']['value'];
+	                    
+	                    // Extract JSON from the text if it's wrapped in ```json
+	                    if (preg_match('/```json\s*(.*?)\s*```/s', $text_value, $matches)) {
+	                        $json_string = $matches[1];
+	                    } else {
+	                        $json_string = $text_value;
+	                    }
+
+	                    $decoded_json = json_decode($json_string, true);
+	                    
+	                    if (json_last_error() === JSON_ERROR_NONE && isset($decoded_json['summary'])) {
+	                        error_log('[INFO] Successfully extracted summary: ' . print_r($decoded_json['summary'], true));
+	                        return $decoded_json['summary'];
+	                    }
+	                }
+	            }
+	        }
+	    }
+
+	    error_log('[ERROR] No valid summary found in messages');
+	    return 'Failed to generate final summary. Could not find summary in response.';
 	}
+
 
 }

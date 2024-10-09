@@ -77,6 +77,16 @@ class Cstn_One_Liners_Vectors {
 
 
 
+	/**
+	 * Create a vector file to be uploaded to the OpenAI vector store.
+	 *
+	 * @since 1.0.0
+	 * @param string $api_key  The OpenAI API key.
+	 * @param array  $vector   The generated vector data.
+	 * @param string $entry_id The ID of the entry being processed.
+	 * @param string $text     The original text content.
+	 * @return array|WP_Error  The ID of the uploaded file or a WP_Error on failure.
+	 */
 	public static function create_vector_file( $api_key, $vector, $entry_id, $text ) {
 	    // Prepare file content to be stored in OpenAI.
 	    $file_content = json_encode( array(
@@ -85,14 +95,15 @@ class Cstn_One_Liners_Vectors {
 	        'text'     => $text,
 	    ) );
 
-	    // Create a temporary file for the vector data.
-	    $temp_file_path = wp_tempnam( 'vector_data' );
+	    // Create a temporary file for the vector data, using a name that includes the entry ID.
+	    $file_name = "centerstone_vector_data_entry_{$entry_id}.json"; // Create a more descriptive file name.
+	    $temp_file_path = wp_tempnam( $file_name ); // Use the descriptive file name instead of a generic one.
 	    file_put_contents( $temp_file_path, $file_content );
 
-	    // Initialize cURL
+	    // Initialize cURL for the upload process.
 	    $ch = curl_init();
 
-	    // Set cURL options
+	    // Set cURL options.
 	    curl_setopt( $ch, CURLOPT_URL, 'https://api.openai.com/v1/files' );
 	    curl_setopt( $ch, CURLOPT_POST, 1 );
 	    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
@@ -105,14 +116,15 @@ class Cstn_One_Liners_Vectors {
 
 	    curl_setopt( $ch, CURLOPT_HTTPHEADER, $headers );
 
+	    // Set the file path and purpose for the POST request.
 	    $postfields = array(
-	        'purpose' => 'fine-tune', // Use a valid purpose according to OpenAI API documentation
-	        'file'    => new CURLFile( $temp_file_path, 'application/json', 'vector_data.json' ),
+	        'purpose' => 'fine-tune', // Use a valid purpose according to OpenAI API documentation.
+	        'file'    => new CURLFile( $temp_file_path, 'application/json', $file_name ), // Use the new descriptive file name.
 	    );
 
 	    curl_setopt( $ch, CURLOPT_POSTFIELDS, $postfields );
 
-	    // Execute cURL request
+	    // Execute cURL request.
 	    $response = curl_exec( $ch );
 	    $httpcode = curl_getinfo( $ch, CURLINFO_HTTP_CODE );
 	    $err = curl_error( $ch );
@@ -121,6 +133,7 @@ class Cstn_One_Liners_Vectors {
 	    // Remove the temporary file after uploading.
 	    unlink( $temp_file_path );
 
+	    // Check for errors during the upload process.
 	    if ( $err ) {
 	        return new WP_Error( 'file_creation_failed', __( 'Failed to create file: ' . $err, 'cstn-one-liners' ) );
 	    } else {
@@ -138,6 +151,7 @@ class Cstn_One_Liners_Vectors {
 	        return $response_body['id'];
 	    }
 	}
+
 
 
 
@@ -231,6 +245,25 @@ class Cstn_One_Liners_Vectors {
 	    return $attachment_result;
 	}
 
+	/**
+	 * Store vector with retry logic.
+	 */
+	public function store_vector_with_retry( $api_key, $vector_store_id, $vector, $entry_id, $text, $max_retries = 3 ) {
+	    $retry_count = 0;
+	    $result = null;
+
+	    while ( $retry_count < $max_retries ) {
+	        $result = Cstn_One_Liners_Vectors::store_vector_in_vector_store( $api_key, $vector_store_id, $vector, $entry_id, $text );
+	        if ( ! is_wp_error( $result ) ) {
+	            return $result;
+	        }
+	        $retry_count++;
+	        error_log( "[RETRY] Failed to store vector for entry ID: {$entry_id}. Retry {$retry_count} of {$max_retries}." );
+	        sleep(1); // Wait 1 second before retrying.
+	    }
+
+	    return $result; // Return the final result (either success or WP_Error).
+	}
 
 
 }

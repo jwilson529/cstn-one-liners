@@ -177,7 +177,7 @@ class Cstn_One_Liners {
 
 	    // Register the AJAX handler for retrieving Gravity Forms entries.
 	    $this->loader->add_action( 'wp_ajax_cstn_retrieve_entries', $plugin_admin, 'cstn_retrieve_entries' );
-	    $this->loader->add_action( 'wp_ajax_cstn_process_entries', $plugin_openai, 'cstn_generate_embeddings' );
+	    $this->loader->add_action( 'wp_ajax_cstn_process_entries', $plugin_openai, 'cstn_process_all_entries' );
 
 	    // Optional: Register any other AJAX handlers here as needed.
 	}

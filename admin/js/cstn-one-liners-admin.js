@@ -7,13 +7,15 @@
         let activeTab = urlParams.get('tab') || 'api_config';
 
         // Listen for changes on the form submit button.
-        $('form').on('submit', function(event) {
-            event.preventDefault();
+        $('form#one-liners-save').on('submit', function(event) {
+            event.preventDefault(); // Prevent default only for this specific form submission
+            console.log('Form submit detected and prevented.');
 
-            // Save settings and perform validation only on the API Configuration tab.
             if (activeTab === 'api_config') {
                 let apiKey = $('#cstn_one_liners_api_key').val();
                 let assistantId = $('#cstn_one_liners_assistant_id').val();
+
+                console.log('Performing validation and API test for:', { apiKey, assistantId });
 
                 // Perform validation and test the API Key and Assistant ID.
                 $.post(ajaxurl, {
@@ -84,89 +86,99 @@
             });
         }
 
-        // Click event for processing entries.
-        $('#process_entries').on('click', function() {
-            // Show a loading message or spinner while processing.
+        $('#process_entries').on('click', function () {
             $('#assistant_response').html('<p>Processing entries, please wait...</p>');
 
-            // Send the AJAX request to process entries in batches.
+            var entryIds = [];
+            $('.entry-status').each(function () {
+                var entryId = $(this).closest('tr').data('entry-id');
+                entryIds.push(entryId);
+            });
+
             $.ajax({
                 url: ajaxurl,
                 type: 'POST',
                 data: {
                     action: 'cstn_process_entries',
-                    security: securityNonce, // Ensure the security nonce is passed.
+                    security: securityNonce,
+                    entry_ids: entryIds
                 },
                 beforeSend: function() {
-                    // Indicate that the process has started.
+                    console.log("AJAX request being sent. Data:", {
+                        action: 'cstn_process_entries',
+                        security: securityNonce,
+                        entry_ids: entryIds
+                    }); // Log AJAX data before sending
                     updateAllStatuses('Processing...');
                 },
                 success: function(response) {
-                    if (response.success) {
-                        // Get the final summary array from the response.
-                        var finalSummary = response.data.final_summary;
+                    console.log("Full response received from server:", response); // Log the complete response from the server
 
-                        // Display each entry's status as complete after processing.
-                        var entryStatuses = response.data.entry_statuses || {};
+                    // Check if response is already an object, if so skip parsing
+                    if (typeof response === 'string') {
+                        try {
+                            response = JSON.parse(response);
+                        } catch (e) {
+                            console.error("Failed to parse JSON response:", e);
+                            return; // Exit the function if parsing fails
+                        }
+                    }
+
+                    if (response.success) {
+                        var entryStatuses = response.entry_statuses || {};
+                        var finalSummary = response.final_summary;
+
+                        console.log("Final summary received:", finalSummary); // Log the final summary value
+
+                        // Update statuses on the UI
                         for (var entryId in entryStatuses) {
                             updateEntryStatus(entryId, entryStatuses[entryId]);
                         }
 
-                        // Check if finalSummary exists and is an array.
-                        if (Array.isArray(finalSummary)) {
-                            // Create HTML to display each sentence separately.
+                        // Display the final summary if it exists
+                        if (finalSummary && Array.isArray(finalSummary)) {
+                            console.log("Valid final summary format. Rendering summary."); // Log if finalSummary is valid and is an array
+
+                            // Properly format and display the final summary
                             var formattedSummary = '<div class="final-summary">';
                             formattedSummary += '<h3>Final Summary</h3>';
-                            formattedSummary += '<ol>'; // Use an ordered list to show each sentence in order.
-
-                            // Loop through each sentence and format it.
+                            formattedSummary += '<ol>';
                             finalSummary.forEach(function(sentence) {
+                                console.log("Adding sentence to summary:", sentence); // Log each sentence being added to the formatted summary
                                 formattedSummary += '<li>' + sentence + '</li>';
                             });
-
                             formattedSummary += '</ol>';
                             formattedSummary += '</div>';
-
-                            // Display the formatted summary in the #assistant_response div.
                             $('#assistant_response').html(formattedSummary);
                         } else {
-                            // If finalSummary is not valid, show an error message.
-                            $('#assistant_response').html('<p>Error: Unable to retrieve final summary.</p>');
+                            console.error('Invalid or missing summary format:', finalSummary); // Log if summary is invalid or missing
+                            $('#assistant_response').html('<p>Error: No valid summary found.</p>');
                         }
                     } else {
-                        console.log(response.data);
+                        console.error('Response data error:', response.data); // Log error if response is not successful
                         alert('Failed to process entries: ' + response.data);
                     }
                 },
                 error: function(xhr, status, error) {
-                    console.log('AJAX Error: ', error);
+                    console.error('AJAX Error: ', error); // Log any AJAX errors
                     $('#assistant_response').html('<p>Error: ' + error + '</p>');
                 }
             });
+
         });
 
-        /**
-         * Updates the status column for all entries in the table.
-         *
-         * @param {string} status - The status message to be displayed.
-         */
         function updateAllStatuses(status) {
-            // Update the status for all rows in the table.
             $('.entry-status').each(function() {
                 $(this).text(status);
             });
         }
 
-        /**
-         * Updates the status for a single entry in the table.
-         *
-         * @param {string} entryId - The ID of the entry.
-         * @param {string} status - The status message to be displayed.
-         */
         function updateEntryStatus(entryId, status) {
-            // Find the row by entry ID and update its status.
+            console.log('Updating status for entry ID:', entryId, 'with status:', status);
             $('#entry-' + entryId).find('.entry-status').text(status);
         }
+
+
 
 
     });

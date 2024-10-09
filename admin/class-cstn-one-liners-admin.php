@@ -123,7 +123,7 @@ class Cstn_One_Liners_Admin {
 	            </a>
 	        </h2>
 
-	        <form method="post" action="options.php">
+	        <form id="one-liners-save" method="post" action="options.php">
 	            <?php
 	            // Only output settings fields for the active tab.
 	            if ( $active_tab === 'api_config' ) {
