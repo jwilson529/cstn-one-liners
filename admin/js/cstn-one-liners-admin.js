@@ -119,7 +119,7 @@
                         try {
                             response = JSON.parse(response);
                         } catch (e) {
-                            console.error("Failed to parse JSON response:", e);
+                            // console.error("Failed to parse JSON response:", e);
                             return; // Exit the function if parsing fails
                         }
                     }

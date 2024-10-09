@@ -24,7 +24,7 @@ class Cstn_One_Liners_Openai {
 	// Holds all collected sentences across entries.
 	private $all_collected_sentences = array();
 
-	public function cstn_process_all_entries() {
+	public function cstn_process_all_entries_test() {
 	    $api_key         = get_option( 'cstn_one_liners_api_key' );
 	    $assistant_id    = get_option( 'cstn_one_liners_assistant_id' );
 		$thread_id = $this->create_thread( $api_key ); 
@@ -42,12 +42,7 @@ class Cstn_One_Liners_Openai {
 		wp_send_json($final_response);
 	}
 
-	/**
-	 * AJAX handler to process all entries one-by-one, store embeddings, and generate a final summary from the vector store.
-	 *
-	 * @since 1.0.0
-	 */
-	public function cstn_process_all_entries_backup() {
+	public function cstn_process_all_entries() {
 	    error_log('[INFO] Starting cstn_process_all_entries AJAX handler.');
 
 	    ini_set('max_execution_time', 300);
@@ -56,7 +51,7 @@ class Cstn_One_Liners_Openai {
 	    // Verify nonce
 	    if (!isset($_POST['security']) || !check_ajax_referer('cstn_ajax_nonce', 'security', false)) {
 	        error_log('[ERROR] Security check failed.');
-	        $this->send_json_with_flush(array(
+	        wp_send_json(array(
 	            'success' => false,
 	            'message' => 'Security verification failed. Please refresh the page and try again.'
 	        ));
@@ -67,7 +62,7 @@ class Cstn_One_Liners_Openai {
 	    $entry_ids = isset($_POST['entry_ids']) ? $_POST['entry_ids'] : array();
 	    if (empty($entry_ids) || !is_array($entry_ids)) {
 	        error_log('[ERROR] No entry IDs provided or invalid format.');
-	        $this->send_json_with_flush(array(
+	        wp_send_json(array(
 	            'success' => false,
 	            'message' => 'No entry IDs provided or invalid format.'
 	        ));
@@ -81,7 +76,7 @@ class Cstn_One_Liners_Openai {
 
 	    if (empty($api_key) || empty($vector_store_id) || empty($assistant_id)) {
 	        error_log('[ERROR] Missing API configuration.');
-	        $this->send_json_with_flush(array(
+	        wp_send_json(array(
 	            'success' => false,
 	            'message' => 'API configuration missing. Please check settings.'
 	        ));
@@ -93,13 +88,6 @@ class Cstn_One_Liners_Openai {
 	    // Process entries
 	    foreach ($entry_ids as $entry_id) {
 	        error_log("[INFO] Processing entry ID: $entry_id");
-	        
-	        $entry_statuses[$entry_id] = 'Processing...';
-	        $this->send_json_with_flush(array(
-	            'success' => true,
-	            'entry_statuses' => $entry_statuses,
-	            'partial' => true
-	        ));
 
 	        $entry = GFAPI::get_entry($entry_id);
 	        if (is_wp_error($entry)) {
@@ -139,11 +127,6 @@ class Cstn_One_Liners_Openai {
 	        }
 
 	        $entry_statuses[$entry_id] = 'Complete';
-	        $this->send_json_with_flush(array(
-	            'success' => true,
-	            'entry_statuses' => $entry_statuses,
-	            'partial' => true
-	        ));
 	    }
 
 	    // Generate final summary
@@ -160,26 +143,9 @@ class Cstn_One_Liners_Openai {
 	    );
 
 	    error_log('[INFO] Final response prepared: ' . print_r($final_response, true));
-	    $this->send_json_with_flush($final_response);
-	}
 
-	/**
-	 * Send JSON response and flush output buffers.
-	 *
-	 * @param array $response The response data to send.
-	 */
-	private function send_json_with_flush( $response ) {
-	    // Ensure output buffering is started if not already active.
-	    if ( ob_get_level() === 0 ) {
-	        ob_start(); // Start output buffering.
-	    }
-
-	    // Send JSON response.
-	    echo json_encode( $response );
-
-	    // Flush the output buffers to send the response immediately.
-	    ob_flush(); // Flush the PHP output buffer.
-	    flush();    // Flush the system output buffer.
+	    // Send the final response as a single JSON object
+	    wp_send_json($final_response);
 	}
 
 
@@ -204,6 +170,7 @@ class Cstn_One_Liners_Openai {
 					'OpenAI-Beta'   => 'assistants=v2',
 				),
 				'body'    => '{}',
+				'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
 			)
 		);
 
@@ -240,6 +207,7 @@ class Cstn_One_Liners_Openai {
 	                'OpenAI-Beta'   => 'assistants=v2',
 	            ),
 	            'body'    => $body,
+	            'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
 	        )
 	    );
 
@@ -271,6 +239,7 @@ class Cstn_One_Liners_Openai {
 	                'OpenAI-Beta'   => 'assistants=v2',
 	            ),
 	            'body'    => $body,
+	            'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
 	        )
 	    );
 

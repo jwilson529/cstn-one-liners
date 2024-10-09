@@ -53,6 +53,7 @@ class Cstn_One_Liners_Vectors {
 	                'Content-Type'  => 'application/json',
 	            ),
 	            'body'    => wp_json_encode( array( 'input' => $text, 'model' => 'text-embedding-ada-002' ) ),
+	            'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
 	        )
 	    );
 
@@ -108,6 +109,11 @@ class Cstn_One_Liners_Vectors {
 	    curl_setopt( $ch, CURLOPT_POST, 1 );
 	    curl_setopt( $ch, CURLOPT_RETURNTRANSFER, true );
 
+	    // Set a longer timeout for the request to allow enough time for file upload.
+	    curl_setopt( $ch, CURLOPT_TIMEOUT, 60 ); // Set the timeout to 60 seconds or more as needed.
+	    curl_setopt( $ch, CURLOPT_CONNECTTIMEOUT, 30 ); // Set a connection timeout of 30 seconds.
+
+	    // Set headers
 	    $headers = array(
 	        'Authorization: Bearer ' . $api_key,
 	        'OpenAI-Beta: assistants=v2',
@@ -183,6 +189,7 @@ class Cstn_One_Liners_Vectors {
 	                'OpenAI-Beta'   => 'assistants=v2',
 	            ),
 	            'body'    => wp_json_encode( $body ),
+	            'timeout' => 30, // Set the timeout to 30 seconds (or more if needed)
 	        )
 	    );
 
