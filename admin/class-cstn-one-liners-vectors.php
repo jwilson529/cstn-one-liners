@@ -124,7 +124,7 @@ class Cstn_One_Liners_Vectors {
 
 	    // Set the file path and purpose for the POST request.
 	    $postfields = array(
-	        'purpose' => 'fine-tune', // Use a valid purpose according to OpenAI API documentation.
+	        'purpose' => 'assistants', // Use a valid purpose according to OpenAI API documentation.
 	        'file'    => new CURLFile( $temp_file_path, 'application/json', $file_name ), // Use the new descriptive file name.
 	    );
 
