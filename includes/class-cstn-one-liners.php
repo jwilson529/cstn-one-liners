@@ -1,5 +1,4 @@
 <?php
-
 /**
  * The file that defines the core plugin class
  *
@@ -44,9 +43,9 @@ class Cstn_One_Liners {
 	 *
 	 * @since    1.0.0
 	 * @access   protected
-	 * @var      string    $cstnOneLiners    The string used to uniquely identify this plugin.
+	 * @var      string    $cstn_one_liners    The string used to uniquely identify this plugin.
 	 */
-	protected $cstnOneLiners;
+	protected $cstn_one_liners;
 
 	/**
 	 * The current version of the plugin.
@@ -72,12 +71,11 @@ class Cstn_One_Liners {
 		} else {
 			$this->version = '1.0.0';
 		}
-		$this->cstnOneLiners = 'cstn-one-liners';
+		$this->cstn_one_liners = 'cstn-one-liners';
 
 		$this->load_dependencies();
 		$this->set_locale();
 		$this->define_admin_hooks();
-		$this->define_public_hooks();
 	}
 
 	/**
@@ -86,7 +84,7 @@ class Cstn_One_Liners {
 	 * Include the following files that make up the plugin:
 	 *
 	 * - Cstn_One_Liners_Loader. Orchestrates the hooks of the plugin.
-	 * - Cstn_One_Liners_i18n. Defines internationalization functionality.
+	 * - Cstn_One_Liners_I18n. Defines internationalization functionality.
 	 * - Cstn_One_Liners_Admin. Defines all hooks for the admin area.
 	 * - Cstn_One_Liners_Public. Defines all hooks for the public side of the site.
 	 *
@@ -125,20 +123,13 @@ class Cstn_One_Liners {
 		 */
 		require_once plugin_dir_path( __DIR__ ) . 'admin/class-cstn-one-liners-vectors.php';
 
-
-		/**
-		 * The class responsible for defining all actions that occur in the public-facing
-		 * side of the site.
-		 */
-		require_once plugin_dir_path( __DIR__ ) . 'public/class-cstn-one-liners-public.php';
-
 		$this->loader = new Cstn_One_Liners_Loader();
 	}
 
 	/**
 	 * Define the locale for this plugin for internationalization.
 	 *
-	 * Uses the Cstn_One_Liners_i18n class in order to set the domain and to register the hook
+	 * Uses the Cstn_One_Liners_I18n class in order to set the domain and to register the hook
 	 * with WordPress.
 	 *
 	 * @since    1.0.0
@@ -146,7 +137,7 @@ class Cstn_One_Liners {
 	 */
 	private function set_locale() {
 
-		$plugin_i18n = new Cstn_One_Liners_i18n();
+		$plugin_i18n = new Cstn_One_Liners_I18n();
 
 		$this->loader->add_action( 'plugins_loaded', $plugin_i18n, 'load_plugin_textdomain' );
 	}
@@ -160,43 +151,28 @@ class Cstn_One_Liners {
 	 */
 	private function define_admin_hooks() {
 
-	    $plugin_admin = new Cstn_One_Liners_Admin( $this->get_cstnOneLiners(), $this->get_version() );
-	    $plugin_openai = new Cstn_One_Liners_Openai();
-	    $plugin_vectors = new Cstn_One_Liners_Vectors();
+		$plugin_admin   = new Cstn_One_Liners_Admin( $this->get_cstn_one_liners(), $this->get_version() );
+		$plugin_openai  = new Cstn_One_Liners_Openai();
+		$plugin_vectors = new Cstn_One_Liners_Vectors();
 
-	    // Enqueue styles and scripts for the admin area.
-	    $this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
-	    $this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
+		// Enqueue styles and scripts for the admin area.
+		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
+		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 
-	    // Add the plugin settings page and register the settings.
-	    $this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_settings_page' );
-	    $this->loader->add_action( 'admin_init', $plugin_admin, 'register_plugin_settings' );
+		// Add the plugin settings page and register the settings.
+		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_settings_page' );
+		$this->loader->add_action( 'admin_init', $plugin_admin, 'register_plugin_settings' );
 
-	    // Register the AJAX handler for testing the API and Assistant ID.
-	    $this->loader->add_action( 'wp_ajax_cstn_test_api_and_assistant', $plugin_admin, 'cstn_test_api_and_assistant' );
+		// Register the AJAX handler for testing the API and Assistant ID.
+		$this->loader->add_action( 'wp_ajax_cstn_test_api_and_assistant', $plugin_admin, 'cstn_test_api_and_assistant' );
 
-	    // Register the AJAX handler for retrieving Gravity Forms entries.
-	    $this->loader->add_action( 'wp_ajax_cstn_retrieve_entries', $plugin_admin, 'cstn_retrieve_entries' );
-	    $this->loader->add_action( 'wp_ajax_cstn_process_entries', $plugin_openai, 'cstn_process_all_entries' );
+		// Register the AJAX handler for retrieving Gravity Forms entries.
+		$this->loader->add_action( 'wp_ajax_cstn_retrieve_entries', $plugin_admin, 'cstn_retrieve_entries' );
+		$this->loader->add_action( 'wp_ajax_cstn_process_entries', $plugin_openai, 'cstn_process_all_entries' );
 
-	    // Optional: Register any other AJAX handlers here as needed.
+		// Optional: Register any other AJAX handlers here as needed.
 	}
 
-
-	/**
-	 * Register all of the hooks related to the public-facing functionality
-	 * of the plugin.
-	 *
-	 * @since    1.0.0
-	 * @access   private
-	 */
-	private function define_public_hooks() {
-
-		$plugin_public = new Cstn_One_Liners_Public( $this->get_cstnOneLiners(), $this->get_version() );
-
-		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
-		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
-	}
 
 	/**
 	 * Run the loader to execute all of the hooks with WordPress.
@@ -214,8 +190,8 @@ class Cstn_One_Liners {
 	 * @since     1.0.0
 	 * @return    string    The name of the plugin.
 	 */
-	public function get_cstnOneLiners() {
-		return $this->cstnOneLiners;
+	public function get_cstn_one_liners() {
+		return $this->cstn_one_liners;
 	}
 
 	/**

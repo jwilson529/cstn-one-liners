@@ -25,9 +25,9 @@ class Cstn_One_Liners_Admin {
 	 *
 	 * @since    1.0.0
 	 * @access   private
-	 * @var      string    $cstnOneLiners    The ID of this plugin.
+	 * @var      string    $cstn_one_liners    The ID of this plugin.
 	 */
-	private $cstnOneLiners;
+	private $cstn_one_liners;
 
 	/**
 	 * Plugin version.
@@ -42,12 +42,12 @@ class Cstn_One_Liners_Admin {
 	 * Constructor to initialize the class and set its properties.
 	 *
 	 * @since 1.0.0
-	 * @param string $cstnOneLiners The name of this plugin.
+	 * @param string $cstn_one_liners The name of this plugin.
 	 * @param string $version       The version of this plugin.
 	 */
-	public function __construct( $cstnOneLiners, $version ) {
-		$this->cstnOneLiners = $cstnOneLiners;
-		$this->version       = $version;
+	public function __construct( $cstn_one_liners, $version ) {
+		$this->cstn_one_liners = $cstn_one_liners;
+		$this->version         = $version;
 	}
 
 	/**
@@ -56,10 +56,10 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function enqueue_styles() {
-	    // Check if we are on the correct settings page.
-	    if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
-	        wp_enqueue_style( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'css/cstn-one-liners-admin.css', array(), $this->version, 'all' );
-	    }
+		// Check if we are on the correct settings page.
+		if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
+			wp_enqueue_style( $this->cstn_one_liners, plugin_dir_url( __FILE__ ) . 'css/cstn-one-liners-admin.css', array(), $this->version, 'all' );
+		}
 	}
 
 	/**
@@ -68,20 +68,20 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function enqueue_scripts() {
-	    // Check if we are on the correct settings page.
-	    if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
-	        wp_enqueue_script( $this->cstnOneLiners, plugin_dir_url( __FILE__ ) . 'js/cstn-one-liners-admin.js', array( 'jquery' ), $this->version, true );
+		// Check if we are on the correct settings page.
+		if ( isset( $_GET['page'] ) && $_GET['page'] === 'cstn_one_liners_settings' ) {
+			wp_enqueue_script( $this->cstn_one_liners, plugin_dir_url( __FILE__ ) . 'js/cstn-one-liners-admin.js', array( 'jquery' ), $this->version, true );
 
-	        // Localize script with the nonce value.
-	        wp_localize_script(
-	            $this->cstnOneLiners,
-	            'cstn_one_liners_vars',
-	            array(
-	                'ajaxurl'        => admin_url( 'admin-ajax.php' ),
-	                'cstn_ajax_nonce' => wp_create_nonce( 'cstn_ajax_nonce' ),
-	            )
-	        );
-	    }
+			// Localize script with the nonce value.
+			wp_localize_script(
+				$this->cstn_one_liners,
+				'cstn_one_liners_vars',
+				array(
+					'ajaxurl'         => admin_url( 'admin-ajax.php' ),
+					'cstn_ajax_nonce' => wp_create_nonce( 'cstn_ajax_nonce' ),
+				)
+			);
+		}
 	}
 
 
@@ -108,51 +108,51 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function create_settings_page() {
-	    // Determine which tab is active based on the `tab` query parameter.
-	    $active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'api_config';
+		// Determine which tab is active based on the `tab` query parameter.
+		$active_tab = isset( $_GET['tab'] ) ? sanitize_text_field( $_GET['tab'] ) : 'api_config';
 
-	    ?>
-	    <div class="wrap">
-	        <h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
-	        <h2 class="nav-tab-wrapper">
-	            <a href="?page=cstn_one_liners_settings&tab=api_config" class="nav-tab <?php echo $active_tab === 'api_config' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e( 'API Configuration', 'cstn-one-liners' ); ?>
-	            </a>
-	            <a href="?page=cstn_one_liners_settings&tab=gravity_forms" class="nav-tab <?php echo $active_tab === 'gravity_forms' ? 'nav-tab-active' : ''; ?>">
-	                <?php esc_html_e( 'Gravity Forms Integration', 'cstn-one-liners' ); ?>
-	            </a>
-	        </h2>
+		?>
+		<div class="wrap">
+			<h1><?php echo esc_html( get_admin_page_title() ); ?></h1>
+			<h2 class="nav-tab-wrapper">
+				<a href="?page=cstn_one_liners_settings&tab=api_config" class="nav-tab <?php echo $active_tab === 'api_config' ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'API Configuration', 'cstn-one-liners' ); ?>
+				</a>
+				<a href="?page=cstn_one_liners_settings&tab=gravity_forms" class="nav-tab <?php echo $active_tab === 'gravity_forms' ? 'nav-tab-active' : ''; ?>">
+					<?php esc_html_e( 'Gravity Forms Integration', 'cstn-one-liners' ); ?>
+				</a>
+			</h2>
 
-	        <form id="one-liners-save" method="post" action="options.php">
-	            <?php
-	            // Only output settings fields for the active tab.
-	            if ( $active_tab === 'api_config' ) {
-	                // Output settings fields for the API Configuration tab.
-	                settings_fields( 'cstn_one_liners_settings' );
-	                do_settings_sections( 'cstn_one_liners_settings' );
-	            } elseif ( $active_tab === 'gravity_forms' ) {
-	                // Output settings fields for the Gravity Forms Integration tab.
-	                settings_fields( 'cstn_gravity_forms_settings' );
-	                do_settings_sections( 'cstn_gravity_forms_settings' );
+			<form id="one-liners-save" method="post" action="options.php">
+				<?php
+				// Only output settings fields for the active tab.
+				if ( $active_tab === 'api_config' ) {
+					// Output settings fields for the API Configuration tab.
+					settings_fields( 'cstn_one_liners_settings' );
+					do_settings_sections( 'cstn_one_liners_settings' );
+				} elseif ( $active_tab === 'gravity_forms' ) {
+					// Output settings fields for the Gravity Forms Integration tab.
+					settings_fields( 'cstn_gravity_forms_settings' );
+					do_settings_sections( 'cstn_gravity_forms_settings' );
 
-	                ?>
-	                <hr>
-	                <h2><?php esc_html_e( 'Retrieve and Process Entries', 'cstn-one-liners' ); ?></h2>
-	                <button type="button" id="retrieve_entries" class="button button-primary">
-	                    <?php esc_html_e( 'Retrieve Entries', 'cstn-one-liners' ); ?>
-	                </button>
-	                <div id="gf_entries_display"></div>
-	                <button type="button" id="process_entries" class="button button-secondary" style="display:none;">
-	                    <?php esc_html_e( 'Send to Assistant', 'cstn-one-liners' ); ?>
-	                </button>
-	                <div id="assistant_response"></div>
-	                <?php
-	            }
-	            ?>
-	            <?php submit_button(); ?>
-	        </form>
-	    </div>
-	    <?php
+					?>
+					<hr>
+					<h2><?php esc_html_e( 'Retrieve and Process Entries', 'cstn-one-liners' ); ?></h2>
+					<button type="button" id="retrieve_entries" class="button button-primary">
+						<?php esc_html_e( 'Retrieve Entries', 'cstn-one-liners' ); ?>
+					</button>
+					<div id="gf_entries_display"></div>
+					<button type="button" id="process_entries" class="button button-secondary" style="display:none;">
+						<?php esc_html_e( 'Send to Assistant', 'cstn-one-liners' ); ?>
+					</button>
+					<div id="assistant_response"></div>
+					<?php
+				}
+				?>
+				<?php submit_button(); ?>
+			</form>
+		</div>
+		<?php
 	}
 
 
@@ -163,71 +163,70 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function register_plugin_settings() {
-	    // Register new settings for API Configuration tab.
-	    register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_assistant_id' );
-	    register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_api_key' );
-	    register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_vector_store_id' );
+		// Register new settings for API Configuration tab.
+		register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_assistant_id' );
+		register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_api_key' );
+		register_setting( 'cstn_one_liners_settings', 'cstn_one_liners_vector_store_id' );
 
+		// Add a new section for API configuration.
+		add_settings_section(
+			'cstn_one_liners_section',
+			__( 'API Configuration', 'cstn-one-liners' ),
+			array( $this, 'settings_section_callback' ),
+			'cstn_one_liners_settings'
+		);
 
-	    // Add a new section for API configuration.
-	    add_settings_section(
-	        'cstn_one_liners_section',
-	        __( 'API Configuration', 'cstn-one-liners' ),
-	        array( $this, 'settings_section_callback' ),
-	        'cstn_one_liners_settings'
-	    );
+		// Add fields for the Assistant ID and API Key in API Configuration tab.
+		add_settings_field(
+			'cstn_one_liners_assistant_id',
+			__( 'Assistant ID', 'cstn-one-liners' ),
+			array( $this, 'assistant_id_callback' ),
+			'cstn_one_liners_settings',
+			'cstn_one_liners_section'
+		);
+		add_settings_field(
+			'cstn_one_liners_api_key',
+			__( 'API Key', 'cstn-one-liners' ),
+			array( $this, 'api_key_callback' ),
+			'cstn_one_liners_settings',
+			'cstn_one_liners_section'
+		);
 
-	    // Add fields for the Assistant ID and API Key in API Configuration tab.
-	    add_settings_field(
-	        'cstn_one_liners_assistant_id',
-	        __( 'Assistant ID', 'cstn-one-liners' ),
-	        array( $this, 'assistant_id_callback' ),
-	        'cstn_one_liners_settings',
-	        'cstn_one_liners_section'
-	    );
-	    add_settings_field(
-	        'cstn_one_liners_api_key',
-	        __( 'API Key', 'cstn-one-liners' ),
-	        array( $this, 'api_key_callback' ),
-	        'cstn_one_liners_settings',
-	        'cstn_one_liners_section'
-	    );
+		// Output the form fields.
+		add_settings_field(
+			'cstn_one_liners_vector_store_id',     // Field ID
+			'Vector Store ID',                     // Field title
+			array( $this, 'vector_store_id_callback' ), // Callback function to render the field
+			'cstn_one_liners_settings',            // Page slug
+			'cstn_one_liners_section'              // Section ID
+		);
 
-	    // Output the form fields.
-	    add_settings_field(
-	        'cstn_one_liners_vector_store_id',     // Field ID
-	        'Vector Store ID',                     // Field title
-	        array( $this, 'vector_store_id_callback' ), // Callback function to render the field
-	        'cstn_one_liners_settings',            // Page slug
-	        'cstn_one_liners_section'              // Section ID
-	    );
+		// Register new settings for Gravity Forms Integration tab.
+		register_setting( 'cstn_gravity_forms_settings', 'cstn_one_liners_form_id' );
 
-	    // Register new settings for Gravity Forms Integration tab.
-	    register_setting( 'cstn_gravity_forms_settings', 'cstn_one_liners_form_id' );
+		// Add a new section for Gravity Forms configuration.
+		add_settings_section(
+			'cstn_gravity_forms_section',
+			__( 'Gravity Forms Integration', 'cstn-one-liners' ),
+			array( $this, 'gravity_forms_section_callback' ),
+			'cstn_gravity_forms_settings'
+		);
 
-	    // Add a new section for Gravity Forms configuration.
-	    add_settings_section(
-	        'cstn_gravity_forms_section',
-	        __( 'Gravity Forms Integration', 'cstn-one-liners' ),
-	        array( $this, 'gravity_forms_section_callback' ),
-	        'cstn_gravity_forms_settings'
-	    );
-
-	    // Add field for the Gravity Forms ID in the Gravity Forms Integration tab.
-	    add_settings_field(
-	        'cstn_one_liners_form_id',
-	        __( 'Gravity Forms ID', 'cstn-one-liners' ),
-	        array( $this, 'gravity_forms_id_callback' ),
-	        'cstn_gravity_forms_settings',
-	        'cstn_gravity_forms_section'
-	    );
+		// Add field for the Gravity Forms ID in the Gravity Forms Integration tab.
+		add_settings_field(
+			'cstn_one_liners_form_id',
+			__( 'Gravity Forms ID', 'cstn-one-liners' ),
+			array( $this, 'gravity_forms_id_callback' ),
+			'cstn_gravity_forms_settings',
+			'cstn_gravity_forms_section'
+		);
 	}
 
 
 
 	public function vector_store_id_callback() {
-	    $vector_store_id = get_option( 'cstn_one_liners_vector_store_id' );
-	    echo '<input type="text" id="cstn_one_liners_vector_store_id" name="cstn_one_liners_vector_store_id" value="' . esc_attr( $vector_store_id ) . '" class="regular-text">';
+		$vector_store_id = get_option( 'cstn_one_liners_vector_store_id' );
+		echo '<input type="text" id="cstn_one_liners_vector_store_id" name="cstn_one_liners_vector_store_id" value="' . esc_attr( $vector_store_id ) . '" class="regular-text">';
 	}
 
 	/**
@@ -236,7 +235,7 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function gravity_forms_section_callback() {
-	    echo '<p>' . esc_html__( 'Configure Gravity Forms settings to retrieve entries for processing.', 'cstn-one-liners' ) . '</p>';
+		echo '<p>' . esc_html__( 'Configure Gravity Forms settings to retrieve entries for processing.', 'cstn-one-liners' ) . '</p>';
 	}
 
 	/**
@@ -245,8 +244,8 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function gravity_forms_id_callback() {
-	    $form_id = get_option( 'cstn_one_liners_form_id' );
-	    echo '<input type="number" id="cstn_one_liners_form_id" name="cstn_one_liners_form_id" value="' . esc_attr( $form_id ) . '" class="regular-text">';
+		$form_id = get_option( 'cstn_one_liners_form_id' );
+		echo '<input type="number" id="cstn_one_liners_form_id" name="cstn_one_liners_form_id" value="' . esc_attr( $form_id ) . '" class="regular-text">';
 	}
 
 	/**
@@ -341,37 +340,37 @@ class Cstn_One_Liners_Admin {
 	 * @since 1.0.0
 	 */
 	public function cstn_test_api_and_assistant() {
-	    // Check if the request contains the necessary parameters.
-	    if ( ! isset( $_POST['api_key'] ) || ! isset( $_POST['assistant_id'] ) ) {
-	        wp_send_json_error( __( 'Missing API Key or Assistant ID.', 'cstn-one-liners' ) );
-	    }
+		// Check if the request contains the necessary parameters.
+		if ( ! isset( $_POST['api_key'] ) || ! isset( $_POST['assistant_id'] ) ) {
+			wp_send_json_error( __( 'Missing API Key or Assistant ID.', 'cstn-one-liners' ) );
+		}
 
-	    $api_key      = sanitize_text_field( $_POST['api_key'] );
-	    $assistant_id = sanitize_text_field( $_POST['assistant_id'] );
+		$api_key      = sanitize_text_field( $_POST['api_key'] );
+		$assistant_id = sanitize_text_field( $_POST['assistant_id'] );
 
-	    // Log the received API key and Assistant ID for debugging.
-	    error_log( 'Received API Key: ' . $api_key );
-	    error_log( 'Received Assistant ID: ' . $assistant_id );
+		// Log the received API key and Assistant ID for debugging.
+		error_log( 'Received API Key: ' . $api_key );
+		error_log( 'Received Assistant ID: ' . $assistant_id );
 
-	    // Validate the API key first.
-	    $api_key_valid = $this->validate_api_key( $api_key );
-	    if ( ! $api_key_valid ) {
-	        error_log( 'API Key validation failed.' );
-	        wp_send_json_error( __( 'Invalid API Key. Please check your key and try again.', 'cstn-one-liners' ) );
-	    }
-	    error_log( 'API Key validated successfully.' );
+		// Validate the API key first.
+		$api_key_valid = $this->validate_api_key( $api_key );
+		if ( ! $api_key_valid ) {
+			error_log( 'API Key validation failed.' );
+			wp_send_json_error( __( 'Invalid API Key. Please check your key and try again.', 'cstn-one-liners' ) );
+		}
+		error_log( 'API Key validated successfully.' );
 
-	    // Validate the Assistant ID using the new function.
-	    $assistant_valid = $this->validate_assistant_id( $api_key, $assistant_id );
-	    if ( ! $assistant_valid ) {
-	        error_log( 'Assistant ID validation failed.' );
-	        wp_send_json_error( __( 'Invalid Assistant ID. Please check the ID and try again.', 'cstn-one-liners' ) );
-	    }
-	    error_log( 'Assistant ID validated successfully.' );
+		// Validate the Assistant ID using the new function.
+		$assistant_valid = $this->validate_assistant_id( $api_key, $assistant_id );
+		if ( ! $assistant_valid ) {
+			error_log( 'Assistant ID validation failed.' );
+			wp_send_json_error( __( 'Invalid Assistant ID. Please check the ID and try again.', 'cstn-one-liners' ) );
+		}
+		error_log( 'Assistant ID validated successfully.' );
 
-	    // If both are valid, log success and return success response.
-	    error_log( 'Both API Key and Assistant ID validated successfully.' );
-	    wp_send_json_success( __( 'API Key and Assistant ID are valid!', 'cstn-one-liners' ) );
+		// If both are valid, log success and return success response.
+		error_log( 'Both API Key and Assistant ID validated successfully.' );
+		wp_send_json_success( __( 'API Key and Assistant ID are valid!', 'cstn-one-liners' ) );
 	}
 
 

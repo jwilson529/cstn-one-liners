@@ -1,5 +1,4 @@
 <?php
-
 /**
  * The plugin bootstrap file
  *
@@ -41,7 +40,7 @@ define( 'CSTN_ONE_LINERS_VERSION', '1.0.0' );
  * The code that runs during plugin activation.
  * This action is documented in includes/class-cstn-one-liners-activator.php
  */
-function activate_cstnOneLiners() {
+function activate_cstn_one_liners() {
 	require_once plugin_dir_path( __FILE__ ) . 'includes/class-cstn-one-liners-activator.php';
 	Cstn_One_Liners_Activator::activate();
 }
@@ -50,13 +49,13 @@ function activate_cstnOneLiners() {
  * The code that runs during plugin deactivation.
  * This action is documented in includes/class-cstn-one-liners-deactivator.php
  */
-function deactivate_cstnOneLiners() {
+function deactivate_cstn_one_liners() {
 	require_once plugin_dir_path( __FILE__ ) . 'includes/class-cstn-one-liners-deactivator.php';
 	Cstn_One_Liners_Deactivator::deactivate();
 }
 
-register_activation_hook( __FILE__, 'activate_cstnOneLiners' );
-register_deactivation_hook( __FILE__, 'deactivate_cstnOneLiners' );
+register_activation_hook( __FILE__, 'activate_cstn_one_liners' );
+register_deactivation_hook( __FILE__, 'deactivate_cstn_one_liners' );
 
 /**
  * The core plugin class that is used to define internationalization,
@@ -73,9 +72,9 @@ require plugin_dir_path( __FILE__ ) . 'includes/class-cstn-one-liners.php';
  *
  * @since    1.0.0
  */
-function run_cstnOneLiners() {
+function run_cstn_one_liners() {
 
 	$plugin = new Cstn_One_Liners();
 	$plugin->run();
 }
-run_cstnOneLiners();
+run_cstn_one_liners();

@@ -1,5 +1,4 @@
 <?php
-
 /**
  * Define the internationalization functionality
  *
@@ -24,7 +23,7 @@
  * @subpackage Cstn_One_Liners/includes
  * @author     James Wilson <james.wilson@centerstone.org>
  */
-class Cstn_One_Liners_i18n {
+class Cstn_One_Liners_I18n {
 
 
 	/**
